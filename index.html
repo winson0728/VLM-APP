@@ -1,0 +1,656 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>RTSP × Ollama VLM Monitor</title>
+  <style>
+    :root {
+      --primary: #1f6feb;
+      --border: #e3e7ef;
+      --bg: #f6f7fb;
+      --card: #ffffff;
+      --alert: #ff4d4f;
+    }
+    body {
+      font-family: "Segoe UI", "Noto Sans TC", system-ui, -apple-system, sans-serif;
+      margin: 16px;
+      background: var(--bg);
+      color: #0f172a;
+      transition: background 0.25s ease, color 0.25s ease;
+    }
+    .header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 12px;
+      flex-wrap: wrap;
+    }
+    .header-actions { margin-left: auto; display: flex; gap: 8px; }
+    h2 { margin: 0; font-size: 22px; }
+    .badge {
+      padding: 6px 12px;
+      border-radius: 999px;
+      background: #eef2ff;
+      color: #1f3b8a;
+      font-weight: 700;
+      font-size: 12px;
+      border: 1px solid #cbd2ff;
+    }
+    .badge.alert {
+      background: #fff1f0;
+      color: #b42318;
+      border-color: #ffc6bf;
+    }
+    .grid { display: grid; grid-template-columns: 420px 1fr; gap: 16px; align-items: start; }
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 14px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.04);
+    }
+    label { display: block; font-size: 12px; color: #334155; font-weight: 700; margin-top: 12px; }
+    input, select, textarea, button {
+      width: 100%;
+      padding: 10px;
+      border-radius: 10px;
+      border: 1px solid #cbd2e0;
+      box-sizing: border-box;
+      font-size: 14px;
+      background: #fff;
+    }
+    textarea { min-height: 150px; resize: vertical; }
+    .row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .btnrow { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 12px; }
+    .span-2 { grid-column: 1 / -1; }
+    .toggle { display: flex; align-items: center; gap: 10px; margin-top: 6px; }
+    .switch { position: relative; width: 44px; height: 24px; }
+    .switch input { opacity: 0; width: 0; height: 0; }
+    .slider {
+      position: absolute;
+      cursor: pointer;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: #cbd5f5;
+      transition: 0.2s;
+      border-radius: 999px;
+    }
+    .slider:before {
+      position: absolute;
+      content: "";
+      height: 18px;
+      width: 18px;
+      left: 3px;
+      top: 3px;
+      background: #fff;
+      border-radius: 50%;
+      transition: 0.2s;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.25);
+    }
+    .switch input:checked + .slider { background: #16a34a; }
+    .switch input:checked + .slider:before { transform: translateX(20px); }
+    .hint { font-size: 12px; color: #64748b; }
+    .btn-inline { width: auto; padding: 6px 10px; font-size: 12px; }
+    .snap-grid { display: grid; grid-template-columns: 240px 1fr; gap: 12px; margin-top: 10px; }
+    .snap-list { border: 1px solid var(--border); border-radius: 12px; padding: 8px; max-height: 300px; overflow: auto; background: #f8fafc; }
+    .snap-item {
+      display: block;
+      width: 100%;
+      padding: 8px 10px;
+      margin-bottom: 6px;
+      border-radius: 10px;
+      border: 1px solid #d7dce6;
+      background: #fff;
+      cursor: pointer;
+      text-align: left;
+      font-size: 12px;
+      color: #111827;
+    }
+    .snap-item.active { border-color: var(--primary); box-shadow: 0 0 0 2px rgba(31,111,235,0.12); }
+    .snap-view img { width: 100%; max-height: 360px; object-fit: contain; background: #0f172a; }
+    .collapsed .grid { grid-template-columns: 1fr; }
+    .collapsed #settingsCard { display: none; }
+    .view-snapshots .grid { grid-template-columns: 1fr; }
+    .view-snapshots #settingsCard { display: none; }
+    .view-snapshots #monitorCard { display: none; }
+    .view-monitor #snapshotCard { display: none; }
+    button {
+      cursor: pointer;
+      border: none;
+      background: var(--primary);
+      color: #fff;
+      font-weight: 700;
+      box-shadow: 0 2px 8px rgba(31,111,235,0.24);
+      transition: transform 0.05s ease, box-shadow 0.2s ease;
+    }
+    button.secondary {
+      background: #fff;
+      color: var(--primary);
+      border: 1px solid var(--primary);
+      box-shadow: none;
+    }
+    button:active { transform: translateY(1px); }
+    img { width: 100%; border-radius: 12px; border: 1px solid var(--border); background: #f8f9fb; }
+    pre {
+      white-space: pre-wrap;
+      word-break: break-word;
+      background: #f6f8fb;
+      padding: 10px;
+      border-radius: 12px;
+      border: 1px solid var(--border);
+      margin: 0;
+      min-height: 80px;
+    }
+    #replyBox { color: #0f172a; transition: color 0.2s ease, background 0.2s ease, border-color 0.2s ease; }
+    .meta { font-size: 12px; color: #4b5563; margin-top: 8px; display: flex; gap: 6px; flex-wrap: wrap; }
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 10px;
+      border-radius: 999px;
+      border: 1px solid #d0d7e2;
+      background: #fff;
+      font-size: 12px;
+      font-weight: 600;
+    }
+    .pill.small { padding: 4px 8px; }
+    .pill.alert { border-color: var(--alert); color: #b42318; background: #fff5f5; }
+    .alert-banner {
+      display: none;
+      background: linear-gradient(90deg, var(--alert), #ff9a62);
+      color: #fff;
+      padding: 10px 12px;
+      border-radius: 12px;
+      font-weight: 700;
+      margin: 10px 0 6px;
+    }
+    .alert-on {
+      background: #2b0b0b;
+      color: #fff;
+    }
+    .alert-on .card { border-color: var(--alert); box-shadow: 0 0 0 2px rgba(255,77,79,0.16); }
+    .alert-on h2, .alert-on label, .alert-on .meta { color: #ffecec; }
+    .alert-on #replyBox {
+      color: #ffb3b3;
+      background: #3a0f0f;
+      border-color: #ff9a62;
+    }
+    .alert-on pre#errBox { color: #ffecec; background: #3a0f0f; border-color: #ff9a62; }
+    @media (max-width: 980px) { .grid { grid-template-columns: 1fr; } }
+  </style>
+</head>
+<body class="view-monitor">
+  <div class="header">
+    <h2>RTSP × Ollama VLM Monitor</h2>
+    <span class="badge">V1.0 基礎</span>
+    <span class="badge alert" id="badgeAlert">V1.1 告警</span>
+    <div class="header-actions">
+      <button class="secondary btn-inline" id="settingsToggle" type="button">收合設定</button>
+      <button class="secondary btn-inline" id="snapshotToggle" type="button">快照</button>
+    </div>
+  </div>
+
+  <div class="grid">
+    <div class="card" id="settingsCard">
+      <div class="meta" style="margin-top:0;">
+        <span>V1.0：原有影像截取、推論、顯示。</span>
+        <span>V1.1：額外關鍵字告警，可變紅背景並播放提示音。</span>
+      </div>
+
+      <div class="row" style="margin-top: 8px;">
+        <div>
+          <label>模式版本</label>
+          <select id="version">
+            <option value="1.0" selected>V1.0 基本</option>
+            <option value="1.1">V1.1 告警</option>
+          </select>
+        </div>
+        <div>
+          <label>告警關鍵字（逗號分隔，V1.1 生效）</label>
+          <input id="alertKeywords" placeholder="alarm, fire, weapon, 警報, 危險" />
+        </div>
+      </div>
+
+      <label>自動快照</label>
+      <div class="toggle">
+        <label class="switch">
+          <input type="checkbox" id="snapshotEnabled" checked />
+          <span class="slider"></span>
+        </label>
+        <span class="hint">VLM 回應包含「建立快照」或「Create snapshot」時自動存檔</span>
+      </div>
+
+      <div class="row" style="margin-top: 4px;">
+        <div>
+          <label>Ollama API URL</label>
+          <input id="ollamaUrl" value="http://192.168.103.1:31434" />
+        </div>
+        <div>
+          <label>Model name</label>
+          <input id="modelName" value="ministral-3:8b" />
+        </div>
+      </div>
+
+      <label style="margin-top: 10px;">RTSP URL</label>
+      <input id="rtspUrl" placeholder="rtsp://user:pass@ip/..." />
+
+      <label>ONVIF 控制</label>
+      <div class="row" style="margin-top: 4px;">
+        <div>
+          <label>ONVIF 主機</label>
+          <input id="onvifHost" placeholder="192.168.1.10" />
+        </div>
+        <div>
+          <label>Port</label>
+          <input id="onvifPort" value="2020" />
+        </div>
+      </div>
+      <div class="row" style="margin-top: 4px;">
+        <div>
+          <label>帳號</label>
+          <input id="onvifUser" />
+        </div>
+        <div>
+          <label>密碼</label>
+          <input id="onvifPass" type="password" />
+        </div>
+      </div>
+      <label>巡邏</label>
+      <div class="toggle">
+        <label class="switch">
+          <input type="checkbox" id="patrolEnabled" />
+          <span class="slider"></span>
+        </label>
+        <span class="hint">啟用後左右慢速移動</span>
+      </div>
+
+      <label>推論間隔</label>
+      <select id="interval">
+        <option value="0.5">500ms</option>
+        <option value="1">1s</option>
+        <option value="2">2s</option>
+        <option value="5" selected>5s</option>
+        <option value="10">10s</option>
+      </select>
+
+      <label>提示語（送到 VLM，建議包含告警條件描述）</label>
+      <textarea id="prompt">請用繁體中文描述畫面，包含：
+1) 可見的主要物件與狀態。
+2) 若發現危險/異常，直接說明並點出位置。</textarea>
+
+      <div class="btnrow">
+        <button onclick="applyConfig()">套用設定</button>
+        <button onclick="startRun()">開始</button>
+      </div>
+      <div class="btnrow">
+        <button class="secondary" onclick="stopRun()">停止</button>
+        <button class="secondary" onclick="oneShot()">單次推論</button>
+      </div>
+      <div class="btnrow">
+        <button class="secondary" onclick="clearAlert()">清除告警狀態</button>
+        <div></div>
+      </div>
+
+      <div class="meta" id="statusLine"></div>
+    </div>
+
+    <div class="card" id="monitorCard">
+      <div class="meta">
+        <span class="pill" id="pillRunning">running: -</span>
+        <span class="pill" id="pillInfer">infer: -</span>
+        <span class="pill" id="pillFrame">frame: -</span>
+        <span class="pill small" id="pillVersion">版本: -</span>
+        <span class="pill small" id="pillAlert">告警: -</span>
+        <span class="pill small" id="pillPatrol">巡邏: -</span>
+      </div>
+
+      <div class="alert-banner" id="alertBanner">告警條件觸發</div>
+
+      <div style="margin-top:10px;">
+        <img id="frameImg" alt="latest frame" />
+      </div>
+      <h3 style="margin:12px 0 8px;">VLM 回應</h3>
+      <pre id="replyBox"></pre>
+      <h3 style="margin:12px 0 8px;">錯誤訊息</h3>
+      <pre id="errBox"></pre>
+    </div>
+
+    <div class="card span-2" id="snapshotCard">
+      <div class="meta" style="margin-top:0;">
+        <span class="pill small" id="snapshotCount">快照: 0</span>
+        <button class="secondary btn-inline" onclick="refreshSnapshots(false)">重新整理</button>
+      </div>
+      <div class="snap-grid">
+        <div class="snap-list" id="snapshotList"></div>
+        <div class="snap-view">
+          <img id="snapshotImg" alt="snapshot preview" />
+          <pre id="snapshotText"></pre>
+          <div class="meta" id="snapshotMeta"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+<script>
+const DEFAULT_ALERT_KEYWORDS = ["alarm", "alert", "danger", "fire", "weapon", "警報", "危險"];
+document.getElementById("alertKeywords").value = DEFAULT_ALERT_KEYWORDS.join(", ");
+
+let lastAlertTs = 0;
+let alertToneCtx = null;
+const statusLine = document.getElementById("statusLine");
+let lastSnapshotTs = 0;
+let snapshotItems = [];
+let selectedSnapshot = "";
+const settingsToggle = document.getElementById("settingsToggle");
+const rtspInput = document.getElementById("rtspUrl");
+const snapshotToggle = document.getElementById("snapshotToggle");
+const POLL_INTERVAL_MS = 33;
+let polling = false;
+
+function setSettingsCollapsed(collapsed) {
+  document.body.classList.toggle("collapsed", collapsed);
+  settingsToggle.innerText = collapsed ? "展開設定" : "收合設定";
+  localStorage.setItem("vlm_settings_collapsed", collapsed ? "1" : "0");
+}
+
+settingsToggle.addEventListener("click", () => {
+  const collapsed = !document.body.classList.contains("collapsed");
+  setSettingsCollapsed(collapsed);
+});
+
+setSettingsCollapsed(localStorage.getItem("vlm_settings_collapsed") === "1");
+
+function setView(mode) {
+  const isSnapshots = mode === "snapshots";
+  document.body.classList.toggle("view-snapshots", isSnapshots);
+  document.body.classList.toggle("view-monitor", !isSnapshots);
+  snapshotToggle.innerText = isSnapshots ? "返回監控" : "快照";
+  localStorage.setItem("vlm_view", mode);
+  if (isSnapshots) {
+    refreshSnapshots(true);
+  }
+}
+
+snapshotToggle.addEventListener("click", () => {
+  const isSnapshots = document.body.classList.contains("view-snapshots");
+  setView(isSnapshots ? "monitor" : "snapshots");
+});
+
+setView(localStorage.getItem("vlm_view") || "monitor");
+
+function parseRtsp(rtsp) {
+  if (!rtsp) return null;
+  const s = rtsp.trim();
+  if (!s.toLowerCase().startsWith("rtsp://")) return null;
+  const re = /^rtsp:\/\/(?:(?<user>[^:@\/]+)(?::(?<pass>[^@\/]*))?@)?(?<host>\[[^\]]+\]|[^:\/]+)(?::(?<port>\d+))?(?:\/.*)?$/i;
+  const m = s.match(re);
+  if (!m) return null;
+  const host = (m.groups?.host || "").replace(/^\[|\]$/g, "");
+  return {
+    user: m.groups?.user || "",
+    pass: m.groups?.pass || "",
+    host,
+  };
+}
+
+function syncOnvifFromRtsp() {
+  const info = parseRtsp(rtspInput.value);
+  if (!info) return;
+  if (info.host) document.getElementById("onvifHost").value = info.host;
+  if (info.user) document.getElementById("onvifUser").value = info.user;
+  if (info.pass) document.getElementById("onvifPass").value = info.pass;
+}
+
+rtspInput.addEventListener("change", syncOnvifFromRtsp);
+rtspInput.addEventListener("blur", syncOnvifFromRtsp);
+
+async function postJson(url, body) {
+  const res = await fetch(url, {
+    method: "POST",
+    headers: {"Content-Type": "application/json"},
+    body: JSON.stringify(body)
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error((data && data.detail) ? JSON.stringify(data.detail) : ("HTTP " + res.status));
+  return data;
+}
+
+function playAlertTone() {
+  try {
+    if (!alertToneCtx) alertToneCtx = new AudioContext();
+    const ctx = alertToneCtx;
+    if (ctx.state === "suspended") ctx.resume();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = "sine";
+    osc.frequency.value = 880;
+    gain.gain.setValueAtTime(0.001, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.35, ctx.currentTime + 0.02);
+    gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.55);
+    osc.connect(gain).connect(ctx.destination);
+    osc.start();
+    osc.stop(ctx.currentTime + 0.6);
+  } catch (e) {
+    console.warn("Alert tone failed:", e);
+  }
+}
+
+function setAlertUI(active, reason, ts) {
+  const banner = document.getElementById("alertBanner");
+  const pill = document.getElementById("pillAlert");
+  const badgeAlert = document.getElementById("badgeAlert");
+  const text = reason || "告警條件觸發";
+
+  banner.style.display = active ? "block" : "none";
+  banner.innerText = text;
+  pill.innerText = "告警: " + (active ? "觸發" : "正常");
+  pill.classList.toggle("alert", active);
+  badgeAlert.classList.toggle("alert", true);
+  document.body.classList.toggle("alert-on", active);
+
+  if (active && ts && ts !== lastAlertTs) {
+    lastAlertTs = ts;
+    playAlertTone();
+  }
+  if (!active) {
+    lastAlertTs = 0;
+  }
+}
+
+function parseKeywords() {
+  return document.getElementById("alertKeywords").value
+    .split(",")
+    .map((k) => k.trim())
+    .filter(Boolean);
+}
+
+function clearSnapshotView() {
+  document.getElementById("snapshotImg").src = "";
+  document.getElementById("snapshotText").innerText = "";
+  document.getElementById("snapshotMeta").innerText = "";
+}
+
+function renderSnapshotList() {
+  const list = document.getElementById("snapshotList");
+  const count = document.getElementById("snapshotCount");
+  list.innerHTML = "";
+  count.innerText = "快照: " + snapshotItems.length;
+
+  if (!snapshotItems.length) {
+    const empty = document.createElement("div");
+    empty.className = "hint";
+    empty.innerText = "尚無快照。";
+    list.appendChild(empty);
+    clearSnapshotView();
+    return;
+  }
+
+  snapshotItems.forEach((item) => {
+    const btn = document.createElement("button");
+    btn.className = "snap-item" + (item.name === selectedSnapshot ? " active" : "");
+    btn.innerText = item.name;
+    btn.onclick = () => showSnapshot(item);
+    list.appendChild(btn);
+  });
+}
+
+async function refreshSnapshots(autoSelectNewest) {
+  try {
+    const res = await fetch("/snapshots");
+    const data = await res.json();
+    snapshotItems = data.items || [];
+    if (autoSelectNewest && snapshotItems[0]) {
+      selectedSnapshot = snapshotItems[0].name;
+    }
+    renderSnapshotList();
+    const current = snapshotItems.find((x) => x.name === selectedSnapshot) || snapshotItems[0];
+    if (current) {
+      await showSnapshot(current);
+    } else {
+      clearSnapshotView();
+    }
+  } catch (e) {
+    console.warn("Snapshot fetch failed:", e);
+  }
+}
+
+async function showSnapshot(item) {
+  selectedSnapshot = item.name;
+  renderSnapshotList();
+  document.getElementById("snapshotImg").src = item.image_url || "";
+  document.getElementById("snapshotMeta").innerText = item.ts ? new Date(item.ts * 1000).toLocaleString() : "";
+  if (item.text_url) {
+    try {
+      const res = await fetch(item.text_url);
+      const text = await res.text();
+      document.getElementById("snapshotText").innerText = text || "";
+    } catch (e) {
+      document.getElementById("snapshotText").innerText = "讀取文字檔失敗。";
+    }
+  } else {
+    document.getElementById("snapshotText").innerText = "無文字檔。";
+  }
+}
+
+async function applyConfig() {
+  const body = {
+    ollama_url: document.getElementById("ollamaUrl").value.trim(),
+    model: document.getElementById("modelName").value.trim(),
+    rtsp_url: document.getElementById("rtspUrl").value.trim(),
+    interval_sec: parseFloat(document.getElementById("interval").value),
+    prompt: document.getElementById("prompt").value,
+    version: document.getElementById("version").value,
+    alert_keywords: parseKeywords(),
+    snapshot_enabled: document.getElementById("snapshotEnabled").checked,
+    onvif_host: document.getElementById("onvifHost").value.trim(),
+    onvif_port: parseInt(document.getElementById("onvifPort").value, 10) || 80,
+    onvif_username: document.getElementById("onvifUser").value.trim(),
+    onvif_password: document.getElementById("onvifPass").value,
+  };
+  try {
+    await postJson("/config", body);
+    statusLine.innerText = "設定已套用。";
+  } catch (e) {
+    statusLine.innerText = "套用失敗: " + e.message;
+  }
+}
+
+document.getElementById("patrolEnabled").addEventListener("change", async (e) => {
+  await applyConfig();
+  await setPatrol(e.target.checked);
+});
+
+async function startRun() {
+  try {
+    await postJson("/start", {});
+    statusLine.innerText = "已開始推論。";
+  } catch (e) {
+    statusLine.innerText = "Start 失敗: " + e.message;
+  }
+}
+async function stopRun() {
+  try {
+    await postJson("/stop", {});
+    statusLine.innerText = "已停止推論。";
+  } catch (e) {
+    statusLine.innerText = "Stop 失敗: " + e.message;
+  }
+}
+async function clearAlert() {
+  try {
+    await postJson("/alert/clear", {});
+    setAlertUI(false, "", null);
+    statusLine.innerText = "已清除告警狀態。";
+  } catch (e) {
+    statusLine.innerText = "清除告警失敗: " + e.message;
+  }
+}
+async function setPatrol(enabled) {
+  try {
+    if (enabled) {
+      await postJson("/onvif/patrol/start", {});
+      statusLine.innerText = "巡邏已啟用。";
+    } else {
+      await postJson("/onvif/patrol/stop", {});
+      statusLine.innerText = "巡邏已停止。";
+    }
+  } catch (e) {
+    document.getElementById("patrolEnabled").checked = !enabled;
+    statusLine.innerText = "巡邏控制失敗: " + e.message;
+  }
+}
+async function oneShot() {
+  try {
+    await postJson("/oneshot", {});
+    statusLine.innerText = "已觸發一次推論，等待結果。";
+  } catch (e) {
+    statusLine.innerText = "One-shot 失敗: " + e.message;
+  }
+}
+
+async function pollStatus() {
+  if (polling) return;
+  polling = true;
+  try {
+    const res = await fetch("/status");
+    const s = await res.json();
+
+    const version = s.config?.version || "1.0";
+    document.getElementById("pillVersion").innerText = "版本: V" + version;
+    document.getElementById("badgeAlert").style.opacity = version === "1.1" ? "1" : "0.45";
+
+    document.getElementById("pillRunning").innerText = "running: " + s.running;
+    document.getElementById("pillInfer").innerText = "infer: " + (s.last_infer_ms ? (s.last_infer_ms + " ms") : "-");
+    document.getElementById("pillFrame").innerText = "frame: " + (s.last_frame_ts ? new Date(s.last_frame_ts * 1000).toLocaleTimeString() : "-");
+    document.getElementById("pillPatrol").innerText = "巡邏: " + (s.onvif_patrol_active ? "開" : "關");
+    document.getElementById("patrolEnabled").checked = Boolean(s.onvif_patrol_active);
+
+    document.getElementById("replyBox").innerText = s.last_reply || "";
+    document.getElementById("errBox").innerText = s.last_error || "";
+
+    if (s.last_frame_b64) {
+      document.getElementById("frameImg").src = "data:image/jpeg;base64," + s.last_frame_b64;
+    }
+
+    setAlertUI(Boolean(s.alert_active), s.alert_reason, s.last_alert_ts);
+    if (s.last_snapshot_ts && s.last_snapshot_ts !== lastSnapshotTs) {
+      lastSnapshotTs = s.last_snapshot_ts;
+      refreshSnapshots(true);
+    }
+  } catch (e) {
+    statusLine.innerText = "取得狀態失敗: " + e.message;
+  } finally {
+    polling = false;
+  }
+}
+
+setInterval(pollStatus, POLL_INTERVAL_MS);
+pollStatus();
+refreshSnapshots(true);
+</script>
+</body>
+</html>

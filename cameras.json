@@ -1,0 +1,78 @@
+{
+  "global": {
+    "ollama_url": "http://10.22.22.166:30082",
+    "model": "ministral-3:8b",
+    "version": "1.0",
+    "prompt": "does anyone wear a hat?",
+    "alert_keywords": [
+      "alarm",
+      "alert",
+      "danger",
+      "警報",
+      "危險"
+    ],
+    "snapshot_enabled": false,
+    "snapshot_keyword": "建立快照,Create snapshot",
+    "snapshot_dir": "snapshots",
+    "response_language": "English",
+    "yolo_enabled": true,
+    "yolo_classes": [
+      "person"
+    ],
+    "yolo_confidence": 0.25,
+    "scenario": "custom",
+    "video_clip_enabled": false,
+    "video_pre_sec": 10,
+    "video_post_sec": 20,
+    "video_fps": 5,
+    "video_clip_dir": "video_clips",
+    "trigger_danger_level": 3
+  },
+  "cameras": [
+    {
+      "camera_id": "CAM1",
+      "label": "",
+      "rtsp_url": "rtsp://192.168.106.101:8080/h264_ulaw.sdp",
+      "enabled": true,
+      "prompt": null,
+      "interval_sec": 10.0,
+      "priority": 1,
+      "snapshot_enabled": null,
+      "zone": "meeting room",
+      "onvif_host": "",
+      "onvif_port": 2020,
+      "onvif_username": "",
+      "onvif_password": ""
+    },
+    {
+      "camera_id": "CAM2",
+      "label": "",
+      "rtsp_url": "rtsp://192.168.106.108:8080/h264_ulaw.sdp",
+      "enabled": true,
+      "prompt": null,
+      "interval_sec": 10.0,
+      "priority": 1,
+      "snapshot_enabled": null,
+      "zone": "meeting room",
+      "onvif_host": "",
+      "onvif_port": 2020,
+      "onvif_username": "",
+      "onvif_password": ""
+    },
+    {
+      "camera_id": "CAM3",
+      "label": "office",
+      "rtsp_url": "rtsp://192.168.108.117:8080/h264_ulaw.sdp",
+      "enabled": true,
+      "prompt": null,
+      "interval_sec": 5.0,
+      "priority": 1,
+      "snapshot_enabled": null,
+      "zone": "",
+      "onvif_host": "",
+      "onvif_port": 2020,
+      "onvif_username": "",
+      "onvif_password": ""
+    }
+  ]
+}
