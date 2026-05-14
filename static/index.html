@@ -1064,6 +1064,7 @@ let toneCtx   = null;
 let polling       = false;
 let cfgLoaded     = false;
 let _camRetryTs   = 0;      // rate-limit camera reload retries
+let _scenRetryTs  = 0;      // rate-limit scenario reload retries
 const POLL_MS = 100;
 
 // ╔══════════════════════════════════════════════════════════╗
@@ -1624,10 +1625,16 @@ function showClip(idx) {
 // ║  Scenarios                                                ║
 // ╚══════════════════════════════════════════════════════════╝
 async function initScenarios() {
-  try {
-    _scenarios = await GET('/scenarios');
-    renderScenarioCards(_activeScenario);
-  } catch(e) { console.warn('scenarios:', e); }
+  for (let attempt = 0; attempt < 5; attempt++) {
+    try {
+      _scenarios = await GET('/scenarios');
+      renderScenarioCards(_activeScenario);
+      return;
+    } catch(e) {
+      console.warn('scenarios attempt', attempt + 1, ':', e);
+      if (attempt < 4) await new Promise(r => setTimeout(r, 1000 * (attempt + 1)));
+    }
+  }
 }
 
 function renderScenarioCards(activeId) {
@@ -1859,15 +1866,19 @@ async function deleteCam() {
 // ║  Load cameras config                                      ║
 // ╚══════════════════════════════════════════════════════════╝
 async function loadCams() {
-  try {
-    const data = await GET('/cameras');
-    camCfgs = data.cameras || [];
-    document.getElementById('pillCams').innerText = t('header.camCount', {n: camCfgs.length});
-    renderCamList(); renderGrid();
-  } catch(e) {
-    console.warn('cameras:', e);
-    document.getElementById('pillCams').innerText = t('header.loadFail');
+  for (let attempt = 0; attempt < 5; attempt++) {
+    try {
+      const data = await GET('/cameras');
+      camCfgs = data.cameras || [];
+      document.getElementById('pillCams').innerText = t('header.camCount', {n: camCfgs.length});
+      renderCamList(); renderGrid();
+      return;
+    } catch(e) {
+      console.warn('cameras attempt', attempt + 1, ':', e);
+      if (attempt < 4) await new Promise(r => setTimeout(r, 1000 * (attempt + 1)));
+    }
   }
+  document.getElementById('pillCams').innerText = t('header.loadFail');
 }
 
 // ╔══════════════════════════════════════════════════════════╗
@@ -1881,9 +1892,14 @@ async function poll() {
     statusD = s;
 
     // Auto-recover: reload cameras if empty (works even when system is stopped)
-    if (camCfgs.length === 0 && Date.now() - _camRetryTs > 1000) {
+    if (camCfgs.length === 0 && Date.now() - _camRetryTs > 2000) {
       _camRetryTs = Date.now();
       await loadCams();
+    }
+    // Auto-recover: reload scenarios if empty (service may not have been ready at init)
+    if (_scenarios.length === 0 && Date.now() - _scenRetryTs > 2000) {
+      _scenRetryTs = Date.now();
+      await initScenarios();
     }
 
     const cams = s.cameras || {};
