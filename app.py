@@ -542,7 +542,8 @@ def _notify_signal_light(alert_on: bool) -> None:
             }
         else:
             payload = {
-                "command": "SET_LIGHTGREEN",
+                "command": "SET_LIGHT",
+                "color": "GREEN",
                 "message": "In operation",
                 "blink": False,
                 "durationSec": 0,
@@ -1913,7 +1914,8 @@ async def test_signal_light(request: Request):
             }
         else:
             payload = {
-                "command": "SET_LIGHTGREEN",
+                "command": "SET_LIGHT",
+                "color": "GREEN",
                 "message": "In operation",
                 "blink": False,
                 "durationSec": 0,
