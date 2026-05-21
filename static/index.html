@@ -1767,16 +1767,32 @@ async function allOneshot()  { try { await POST('/oneshot', {}); } catch(e) { al
 async function clearAllAlerts() { try { await POST('/alert/clear', {}); } catch(e) { alert(e.message); } }
 
 async function testAlertLight(alertOn) {
-  const msgEl = document.getElementById('alertLightMsg');
+  const msgEl  = document.getElementById('alertLightMsg');
+  const lightUrl = (document.getElementById('alertLightUrl').value || '').trim();
+  msgEl.style.color = '#888';
+  msgEl.innerText = '⏳ 送出中…';
   try {
-    await POST('/signal_light/test', { alert_on: alertOn });
-    msgEl.style.color = alertOn ? '#dc3545' : '#28a745';
-    msgEl.innerText   = alertOn ? '🔴 RED 送出成功' : '🟢 GREEN 送出成功';
+    const resp = await fetch('/signal_light/test', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ alert_on: alertOn, url: lightUrl }),
+    });
+    const data = await resp.json().catch(() => ({}));
+    if (data.ok) {
+      msgEl.style.color = alertOn ? '#dc3545' : '#28a745';
+      msgEl.innerText   = alertOn
+        ? `🔴 RED blink 送出成功 (HTTP ${data.status_code})`
+        : `🟢 GREEN 送出成功 (HTTP ${data.status_code})`;
+    } else {
+      msgEl.style.color = '#dc3545';
+      const errDetail = data.error || `HTTP ${resp.status}`;
+      msgEl.innerText = `✗ 無法連接警示燈: ${errDetail}`;
+    }
   } catch(e) {
     msgEl.style.color = '#dc3545';
-    msgEl.innerText = '✗ ' + e.message;
+    msgEl.innerText = '✗ 網路錯誤: ' + e.message;
   }
-  setTimeout(() => msgEl.innerText = '', 4000);
+  setTimeout(() => msgEl.innerText = '', 8000);
 }
 async function camOneshot(id) { try { await POST(`/cameras/${id}/oneshot`, {}); } catch(e) { alert(e.message); } }
 async function clearCamAlert(id) {

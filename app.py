@@ -1895,11 +1895,36 @@ def camera_clear_alert(camera_id: str):
 
 @app.post("/signal_light/test")
 async def test_signal_light(request: Request):
-    """Manually test the signal light API (UI test button)."""
+    """Synchronous test: bypasses alert_light_enabled, returns actual API result."""
     body = await request.json()
     alert_on = bool(body.get("alert_on", True))
-    threading.Thread(target=_notify_signal_light, args=(alert_on,), daemon=True).start()
-    return JSONResponse({"ok": True, "alert_on": alert_on})
+    # Use URL from request body if provided (so UI can test with unsaved value)
+    url = (body.get("url") or cfg.alert_light_url or "").strip()
+    if not url:
+        return JSONResponse({"ok": False, "error": "alert_light_url is empty"}, status_code=400)
+    try:
+        if alert_on:
+            payload = {
+                "command": "SET_LIGHT",
+                "color": "RED",
+                "message": "alarm",
+                "blink": True,
+                "durationSec": 0,
+            }
+        else:
+            payload = {
+                "command": "SET_LIGHTGREEN",
+                "message": "In operation",
+                "blink": False,
+                "durationSec": 0,
+            }
+        r = requests.post(url, json=payload, timeout=5)
+        print(f"[LIGHT TEST] {'RED blink' if alert_on else 'GREEN'} → {r.status_code} {r.text[:80]}")
+        return JSONResponse({"ok": True, "status_code": r.status_code,
+                             "alert_on": alert_on, "url": url})
+    except Exception as e:
+        print(f"[LIGHT TEST] error: {e}")
+        return JSONResponse({"ok": False, "error": str(e), "url": url}, status_code=502)
 
 
 @app.post("/cameras/{camera_id}/onvif/patrol/start")
