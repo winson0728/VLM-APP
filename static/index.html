@@ -621,6 +621,20 @@
           <summary data-i18n="panel.globalPrompt">全域 VLM Prompt</summary>
           <textarea id="globalPrompt" style="min-height:90px;font-size:11px"></textarea>
         </details>
+        <details style="margin-top:8px" id="alertLightSection">
+          <summary data-i18n="panel.alertLight">🚨 警示燈設定</summary>
+          <div class="toggle" style="margin-top:6px">
+            <label class="switch"><input type="checkbox" id="alertLightEnabled"/><span class="slider"></span></label>
+            <span class="hint" data-i18n="hint.alertLight">告警時自動觸發警示燈 API</span>
+          </div>
+          <label style="margin-top:8px;display:block" data-i18n="form.alertLightUrl">警示燈 API URL</label>
+          <input id="alertLightUrl" placeholder="http://10.22.22.168:8080/api/signal" style="font-size:11px"/>
+          <div class="btnrow" style="margin-top:6px;gap:6px">
+            <button class="btn btn-danger btn-sm" onclick="testAlertLight(true)" data-i18n="btn.testRed">🔴 測試告警燈</button>
+            <button class="btn btn-secondary btn-sm" onclick="testAlertLight(false)" data-i18n="btn.testGreen">🟢 測試正常燈</button>
+          </div>
+          <div class="hint" id="alertLightMsg" style="margin-top:4px"></div>
+        </details>
         <div class="btnrow">
           <button class="btn btn-primary btn-sm" onclick="applyGlobalConfig()" data-i18n="btn.apply">套用設定</button>
         </div>
@@ -828,12 +842,15 @@ const I18N = {
   'panel.settings':'設定','panel.scenario':'偵測場景','panel.globalConfig':'全域設定',
   'panel.ollamaModelVer':'Ollama / Model / 版本','panel.yolo':'YOLO 預篩選設定',
   'panel.video':'影片錄製設定','panel.globalPrompt':'全域 VLM Prompt',
-  'panel.sysOps':'系統操作','panel.camList':'攝影機清單',
+  'panel.alertLight':'🚨 警示燈設定','panel.sysOps':'系統操作','panel.camList':'攝影機清單',
   'form.ollamaUrl':'Ollama API URL','form.model':'Model','form.version':'Version',
   'form.v10':'V1.0 Basic','form.v11':'V1.1 Alerts','form.autoSnap':'Auto Snapshot',
   'form.snapKeyword':'Snapshot keyword','form.alertKw':'Alert keywords (V1.1, 逗號分隔)',
   'form.respLang':'回應語言','form.yoloConf':'信心度閾值',
   'form.yoloClasses':'偵測物件（多選，Ctrl+點選）',
+  'form.alertLightUrl':'警示燈 API URL',
+  'hint.alertLight':'告警時自動觸發警示燈 API',
+  'btn.testRed':'🔴 測試告警燈','btn.testGreen':'🟢 測試正常燈',
   'form.triggerLvl':'觸發 Level（≥）','form.preSec':'前段秒數','form.postSec':'後段秒數','form.videoFps':'錄影 FPS',
   'form.label':'Label（顯示名稱）','form.labelPh':'入口大廳',
   'form.zone':'Zone（區域）','form.zonePh':'例: 辦公室',
@@ -880,12 +897,15 @@ const I18N = {
   'panel.settings':'Settings','panel.scenario':'Detection Scenarios','panel.globalConfig':'Global Config',
   'panel.ollamaModelVer':'Ollama / Model / Version','panel.yolo':'YOLO Pre-filter',
   'panel.video':'Video Recording','panel.globalPrompt':'Global VLM Prompt',
-  'panel.sysOps':'System Operations','panel.camList':'Camera List',
+  'panel.alertLight':'🚨 Signal Light','panel.sysOps':'System Operations','panel.camList':'Camera List',
   'form.ollamaUrl':'Ollama API URL','form.model':'Model','form.version':'Version',
   'form.v10':'V1.0 Basic','form.v11':'V1.1 Alerts','form.autoSnap':'Auto Snapshot',
   'form.snapKeyword':'Snapshot keyword','form.alertKw':'Alert keywords (V1.1, comma-separated)',
   'form.respLang':'Response Language','form.yoloConf':'Confidence Threshold',
   'form.yoloClasses':'Detection objects (multi-select, Ctrl+click)',
+  'form.alertLightUrl':'Signal Light API URL',
+  'hint.alertLight':'Trigger signal light API on alert',
+  'btn.testRed':'🔴 Test Alert Light','btn.testGreen':'🟢 Test OK Light',
   'form.triggerLvl':'Trigger Level (≥)','form.preSec':'Pre-event sec','form.postSec':'Post-event sec','form.videoFps':'Recording FPS',
   'form.label':'Label (display name)','form.labelPh':'Entrance hall',
   'form.zone':'Zone (area)','form.zonePh':'e.g.: Office',
@@ -932,12 +952,15 @@ const I18N = {
   'panel.settings':'設定','panel.scenario':'検知シナリオ','panel.globalConfig':'グローバル設定',
   'panel.ollamaModelVer':'Ollama / Model / バージョン','panel.yolo':'YOLO プレフィルタ',
   'panel.video':'録画設定','panel.globalPrompt':'グローバル VLM プロンプト',
-  'panel.sysOps':'システム操作','panel.camList':'カメラ一覧',
+  'panel.alertLight':'🚨 警告灯設定','panel.sysOps':'システム操作','panel.camList':'カメラ一覧',
   'form.ollamaUrl':'Ollama API URL','form.model':'Model','form.version':'バージョン',
   'form.v10':'V1.0 基本','form.v11':'V1.1 アラート','form.autoSnap':'自動スナップショット',
   'form.snapKeyword':'スナップショットキーワード','form.alertKw':'アラートキーワード（V1.1, カンマ区切り）',
   'form.respLang':'応答言語','form.yoloConf':'信頼度閾値',
   'form.yoloClasses':'検知対象（複数選択、Ctrl+クリック）',
+  'form.alertLightUrl':'警告灯 API URL',
+  'hint.alertLight':'アラート時に警告灯 API を自動起動',
+  'btn.testRed':'🔴 テスト（警告）','btn.testGreen':'🟢 テスト（正常）',
   'form.triggerLvl':'トリガーレベル（≥）','form.preSec':'前段秒数','form.postSec':'後段秒数','form.videoFps':'録画 FPS',
   'form.label':'ラベル（表示名）','form.labelPh':'エントランスホール',
   'form.zone':'ゾーン（エリア）','form.zonePh':'例: オフィス',
@@ -1694,6 +1717,9 @@ function loadCfgIntoForm(config) {
   document.getElementById('videoPreSec').value     = config.video_pre_sec ?? 15;
   document.getElementById('videoPostSec').value    = config.video_post_sec ?? 30;
   document.getElementById('videoFps').value        = config.video_fps ?? 5;
+  // Alert light
+  document.getElementById('alertLightEnabled').checked = config.alert_light_enabled || false;
+  document.getElementById('alertLightUrl').value   = config.alert_light_url || 'http://10.22.22.168:8080/api/signal';
   selectScenario(config.scenario || 'general_safety');
 }
 
@@ -1718,6 +1744,8 @@ async function applyGlobalConfig(silent = false) {
       video_pre_sec:         parseInt(document.getElementById('videoPreSec').value),
       video_post_sec:        parseInt(document.getElementById('videoPostSec').value),
       video_fps:             parseInt(document.getElementById('videoFps').value),
+      alert_light_enabled:   document.getElementById('alertLightEnabled').checked,
+      alert_light_url:       document.getElementById('alertLightUrl').value.trim(),
     });
     // Keep _cfgPrompt in sync so switching to custom shows correct value
     if (_activeScenario === 'custom') {
@@ -1737,6 +1765,19 @@ async function startSystem() { try { await POST('/start', {}); } catch(e) { aler
 async function stopSystem()  { try { await POST('/stop',  {}); } catch(e) { alert('Stop: '  + e.message); } }
 async function allOneshot()  { try { await POST('/oneshot', {}); } catch(e) { alert('Oneshot: ' + e.message); } }
 async function clearAllAlerts() { try { await POST('/alert/clear', {}); } catch(e) { alert(e.message); } }
+
+async function testAlertLight(alertOn) {
+  const msgEl = document.getElementById('alertLightMsg');
+  try {
+    await POST('/signal_light/test', { alert_on: alertOn });
+    msgEl.style.color = alertOn ? '#dc3545' : '#28a745';
+    msgEl.innerText   = alertOn ? '🔴 RED 送出成功' : '🟢 GREEN 送出成功';
+  } catch(e) {
+    msgEl.style.color = '#dc3545';
+    msgEl.innerText = '✗ ' + e.message;
+  }
+  setTimeout(() => msgEl.innerText = '', 4000);
+}
 async function camOneshot(id) { try { await POST(`/cameras/${id}/oneshot`, {}); } catch(e) { alert(e.message); } }
 async function clearCamAlert(id) {
   try { await POST(`/cameras/${id}/alert/clear`, {}); renderDetail(); } catch(e) { alert(e.message); }

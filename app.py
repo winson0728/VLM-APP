@@ -401,6 +401,9 @@ class GlobalConfig(BaseModel):
     video_fps: int = Field(default=5, ge=1, le=15, description="Video recording FPS.")
     video_clip_dir: str = Field(default="video_clips", description="Directory for video clips.")
     trigger_danger_level: int = Field(default=5, ge=1, le=10, description="Danger level threshold for alert/recording.")
+    # Signal light
+    alert_light_enabled: bool = Field(default=False, description="Enable signal light API on alert state change.")
+    alert_light_url: str = Field(default="http://10.22.22.168:8080/api/signal", description="Signal light API endpoint URL.")
 
 
 # ──────────────────────────────────────────────────────────────
@@ -514,6 +517,53 @@ def _load_config() -> None:
 
 
 _load_config()
+
+
+# ──────────────────────────────────────────────────────────────
+# Signal Light (alert lamp) integration
+# ──────────────────────────────────────────────────────────────
+
+_prev_global_alert: bool = False
+_alert_light_lock = threading.Lock()
+
+
+def _notify_signal_light(alert_on: bool) -> None:
+    """Call the external signal light API. Runs in a daemon thread (fire-and-forget)."""
+    if not cfg.alert_light_enabled or not cfg.alert_light_url:
+        return
+    try:
+        if alert_on:
+            payload = {
+                "command": "SET_LIGHT",
+                "color": "RED",
+                "message": "alarm",
+                "blink": True,
+                "durationSec": 0,
+            }
+        else:
+            payload = {
+                "command": "SET_LIGHTGREEN",
+                "message": "In operation",
+                "blink": False,
+                "durationSec": 0,
+            }
+        r = requests.post(cfg.alert_light_url, json=payload, timeout=3)
+        print(f"[LIGHT] {'🔴 RED blink' if alert_on else '🟢 GREEN'} → {r.status_code}")
+    except Exception as e:
+        print(f"[LIGHT] signal light error: {e}")
+
+
+def _update_signal_light() -> None:
+    """Check if global alert state changed; if so fire the light API asynchronously."""
+    global _prev_global_alert
+    with _alert_light_lock:
+        with st.global_lock:
+            new_alert = any(s.alert_active for s in st.cameras.values())
+        if new_alert != _prev_global_alert:
+            _prev_global_alert = new_alert
+            threading.Thread(
+                target=_notify_signal_light, args=(new_alert,), daemon=True
+            ).start()
 
 
 # ──────────────────────────────────────────────────────────────
@@ -1342,6 +1392,8 @@ def infer_once_for_camera(cam_cfg: CameraConfig) -> None:
             if cam_state.last_error.startswith("Ollama"):
                 cam_state.last_error = ""
 
+        _update_signal_light()
+
     except Exception as e:
         _discard_snapshot(temp_snapshot_path)
         with cam_state.lock:
@@ -1491,6 +1543,8 @@ def _infer_zone(zone_name: str, zone_cams: List[CameraConfig]) -> None:
                     cam_state_z.last_snapshot_text_path = snapshot_text_path
                 if cam_state_z.last_error.startswith("Ollama"):
                     cam_state_z.last_error = ""
+
+        _update_signal_light()
 
     except Exception as e:
         _discard_snapshot(temp_snapshot_path)
@@ -1835,7 +1889,17 @@ def camera_clear_alert(camera_id: str):
         cam_state.alert_active = False
         cam_state.alert_reason = ""
         cam_state.alert_ts = None
+    _update_signal_light()
     return JSONResponse({"ok": True})
+
+
+@app.post("/signal_light/test")
+async def test_signal_light(request: Request):
+    """Manually test the signal light API (UI test button)."""
+    body = await request.json()
+    alert_on = bool(body.get("alert_on", True))
+    threading.Thread(target=_notify_signal_light, args=(alert_on,), daemon=True).start()
+    return JSONResponse({"ok": True, "alert_on": alert_on})
 
 
 @app.post("/cameras/{camera_id}/onvif/patrol/start")
@@ -1883,6 +1947,7 @@ def clear_all_alerts():
             cam_state.alert_active = False
             cam_state.alert_reason = ""
             cam_state.alert_ts = None
+    _update_signal_light()
     return JSONResponse({"ok": True})
 
 
