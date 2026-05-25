@@ -781,6 +781,7 @@
         <div>
           <label data-i18n="form.videoCodec">影像編碼</label>
           <select id="fCodec" style="margin-top:3px">
+            <option value="auto" selected data-i18n="form.codecAuto">自動偵測</option>
             <option value="h264" data-i18n="form.codecH264">H.264</option>
             <option value="h265" data-i18n="form.codecH265">H.265 / HEVC</option>
           </select>
@@ -863,7 +864,7 @@ const I18N = {
   'form.triggerLvl':'觸發 Level（≥）','form.preSec':'前段秒數','form.postSec':'後段秒數','form.videoFps':'錄影 FPS',
   'form.label':'Label（顯示名稱）','form.labelPh':'入口大廳',
   'form.zone':'Zone（區域）','form.zonePh':'例: 辦公室',
-  'form.videoCodec':'影像編碼','form.codecH264':'H.264','form.codecH265':'H.265 / HEVC',
+  'form.videoCodec':'影像編碼','form.codecAuto':'自動偵測','form.codecH264':'H.264','form.codecH265':'H.265 / HEVC',
   'form.interval':'推論間隔','form.priority':'優先權 (1-10)','form.autoSnapCam':'自動快照',
   'form.inheritGlobal':'繼承全域','form.enable':'啟用','form.disable':'停用',
   'form.enableCam':'啟用此攝影機','form.camPrompt':'個別 VLM Prompt（空白=使用全域）',
@@ -919,7 +920,7 @@ const I18N = {
   'form.triggerLvl':'Trigger Level (≥)','form.preSec':'Pre-event sec','form.postSec':'Post-event sec','form.videoFps':'Recording FPS',
   'form.label':'Label (display name)','form.labelPh':'Entrance hall',
   'form.zone':'Zone (area)','form.zonePh':'e.g.: Office',
-  'form.videoCodec':'Video Codec','form.codecH264':'H.264','form.codecH265':'H.265 / HEVC',
+  'form.videoCodec':'Video Codec','form.codecAuto':'Auto Detect','form.codecH264':'H.264','form.codecH265':'H.265 / HEVC',
   'form.interval':'Inference interval','form.priority':'Priority (1-10)','form.autoSnapCam':'Auto Snapshot',
   'form.inheritGlobal':'Inherit global','form.enable':'Enable','form.disable':'Disable',
   'form.enableCam':'Enable this camera','form.camPrompt':'Per-camera VLM Prompt (blank = use global)',
@@ -975,7 +976,7 @@ const I18N = {
   'form.triggerLvl':'トリガーレベル（≥）','form.preSec':'前段秒数','form.postSec':'後段秒数','form.videoFps':'録画 FPS',
   'form.label':'ラベル（表示名）','form.labelPh':'エントランスホール',
   'form.zone':'ゾーン（エリア）','form.zonePh':'例: オフィス',
-  'form.videoCodec':'映像コーデック','form.codecH264':'H.264','form.codecH265':'H.265 / HEVC',
+  'form.videoCodec':'映像コーデック','form.codecAuto':'自動検出','form.codecH264':'H.264','form.codecH265':'H.265 / HEVC',
   'form.interval':'推論間隔','form.priority':'優先度 (1-10)','form.autoSnapCam':'自動スナップショット',
   'form.inheritGlobal':'グローバル継承','form.enable':'有効','form.disable':'無効',
   'form.enableCam':'このカメラを有効にする','form.camPrompt':'個別 VLM プロンプト（空白=グローバル使用）',

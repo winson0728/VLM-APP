@@ -351,7 +351,7 @@ class CameraConfig(BaseModel):
     priority: int = Field(default=1, ge=1, le=10, description="Round-robin weight (higher = more frequent).")
     snapshot_enabled: Optional[bool] = Field(default=None, description="Override global snapshot_enabled; None inherits.")
     zone: str = Field(default="", description="Zone/room name. Cameras in the same zone do joint multi-view inference.")
-    video_codec: str = Field(default="h264", description="RTSP video codec: 'h264' or 'h265'.")
+    video_codec: str = Field(default="auto", description="RTSP video codec: 'auto' (detect), 'h264', or 'h265'.")
     # ONVIF PTZ (optional, per-camera)
     onvif_host: str = Field(default="")
     onvif_port: int = Field(default=2020, ge=1, le=65535)
@@ -888,8 +888,10 @@ def _read_latest_frame(cap: cv2.VideoCapture, max_skip: int = 8):
 # Subprocess ffmpeg GPU capture
 # ──────────────────────────────────────────────────────────────
 
-def _probe_resolution(rtsp: str) -> tuple[int, int]:
-    """Use ffprobe / ffmpeg to detect stream resolution. Returns (width, height) or (0, 0)."""
+def _probe_stream_info(rtsp: str) -> tuple[int, int, str]:
+    """Probe RTSP stream: returns (width, height, codec) using ffprobe.
+    codec is 'h264', 'h265', or 'h264' as safe fallback.
+    Returns (0, 0, 'h264') on failure."""
     ffprobe = shutil.which("ffprobe") or ""
     if not ffprobe and _FFMPEG_BIN:
         ffprobe = str(Path(_FFMPEG_BIN).parent / "ffprobe")
@@ -897,25 +899,31 @@ def _probe_resolution(rtsp: str) -> tuple[int, int]:
         try:
             r = subprocess.run(
                 [ffprobe, "-v", "error", "-select_streams", "v:0",
-                 "-show_entries", "stream=width,height",
-                 "-of", "csv=p=0:s=x",
+                 "-show_entries", "stream=width,height,codec_name",
+                 "-of", "csv=p=0",
                  "-rtsp_transport", "tcp", "-i", rtsp],
                 capture_output=True, text=True, timeout=10,
             )
-            parts = r.stdout.strip().split("x")
-            if len(parts) == 2:
-                return int(parts[0]), int(parts[1])
+            # Output: "width,height,codec_name" e.g. "1920,1080,h264" or "640,480,hevc"
+            parts = r.stdout.strip().split(",")
+            if len(parts) >= 3:
+                w, h = int(parts[0]), int(parts[1])
+                raw_codec = parts[2].strip().lower()
+                codec = "h265" if raw_codec in ("hevc", "h265") else "h264"
+                return w, h, codec
+            elif len(parts) == 2:
+                return int(parts[0]), int(parts[1]), "h264"
         except Exception:
             pass
-    # Fallback: quick OpenCV probe
+    # Fallback: quick OpenCV probe (no codec info)
     cap = cv2.VideoCapture(rtsp)
     if cap.isOpened():
         w = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
         h = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
         cap.release()
         if w > 0 and h > 0:
-            return w, h
-    return 0, 0
+            return w, h, "h264"
+    return 0, 0, "h264"
 
 
 _DISPLAY_FPS = int(os.getenv("VLM_DISPLAY_FPS", "15"))
@@ -969,19 +977,23 @@ def _capture_gpu(camera_id: str, rtsp_url: str, cam_state: CameraState,
     codec: 'h264' → h264_cuvid, 'h265' → hevc_cuvid.
     """
     cam_stop = cam_state.capture_stop_event
-    cuvid_name = "hevc_cuvid" if codec.lower() in ("h265", "hevc") else "h264_cuvid"
+    cfg_codec = codec.lower()   # 'auto', 'h264', 'h265'
 
     while not st.stop_event.is_set() and not cam_stop.is_set():
-        w, h = _probe_resolution(rtsp_url)
+        w, h, detected_codec = _probe_stream_info(rtsp_url)
         if w == 0 or h == 0:
             with cam_state.lock:
                 cam_state.last_error = f"Cannot probe resolution: {rtsp_url}"
             time.sleep(2.0)
             continue
 
+        # Resolve effective codec: explicit setting wins; 'auto' uses detected value
+        effective_codec = detected_codec if cfg_codec == "auto" else cfg_codec
+        cuvid_name = "hevc_cuvid" if effective_codec in ("h265", "hevc") else "h264_cuvid"
+
         frame_bytes = w * h * 3
-        proc = _start_ffmpeg_process(rtsp_url, w, h, use_gpu=True, codec=codec)
-        print(f"[CAPTURE-GPU] {camera_id}: started ffmpeg {cuvid_name}  {w}x{h}  @{_DISPLAY_FPS}fps")
+        proc = _start_ffmpeg_process(rtsp_url, w, h, use_gpu=True, codec=effective_codec)
+        print(f"[CAPTURE-GPU] {camera_id}: {cuvid_name} (cfg={cfg_codec}/detected={detected_codec})  {w}x{h}  @{_DISPLAY_FPS}fps")
         with cam_state.lock:
             cam_state.last_error = ""
 
