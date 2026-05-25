@@ -458,6 +458,9 @@ class CameraState:
     # Capture thread
     capture_thread: Optional[threading.Thread] = None
     capture_stop_event: threading.Event = field(default_factory=threading.Event)
+    # Dedicated real-time YOLO worker thread
+    yolo_thread: Optional[threading.Thread] = None
+    yolo_stop_event: threading.Event = field(default_factory=threading.Event)
     # Mutex protecting all fields above
     lock: threading.Lock = field(default_factory=threading.Lock)
 
@@ -1196,6 +1199,10 @@ def capture_worker(camera_id: str, rtsp_url: str, cam_state: CameraState,
 # ──────────────────────────────────────────────────────────────
 _yolo_model = None
 _yolo_model_lock = threading.Lock()
+# Serialises concurrent YOLO inference calls across all camera worker threads.
+# ultralytics / PyTorch model instances are not safely callable from multiple
+# threads simultaneously when they share a single model object.
+_yolo_infer_lock = threading.Lock()
 
 
 def _get_yolo_model():
@@ -1218,7 +1225,8 @@ def _yolo_filter(frame_np, target_classes: list, confidence: float) -> tuple:
         return True, "", []
     try:
         model = _get_yolo_model()
-        results = model(frame_np, verbose=False, conf=confidence)
+        with _yolo_infer_lock:
+            results = model(frame_np, verbose=False, conf=confidence)
         hits = []
         boxes = []
         for r in results:
@@ -1235,6 +1243,56 @@ def _yolo_filter(frame_np, target_classes: list, confidence: float) -> tuple:
     except Exception as e:
         print(f"[YOLO] filter error: {e}")
         return True, "", []   # fail-open: allow VLM if YOLO errors
+
+
+# ──────────────────────────────────────────────────────────────
+# Dedicated per-camera YOLO worker (real-time bounding boxes)
+# ──────────────────────────────────────────────────────────────
+
+def _yolo_worker(camera_id: str, cam_state: CameraState) -> None:
+    """Per-camera daemon thread that continuously runs YOLO on the latest frame.
+
+    Updates cam_state.last_yolo_boxes in real-time so the capture thread can
+    overlay bounding boxes on every display frame, independent of the slow
+    VLM inference cycle.  Multiple camera workers serialise through
+    _yolo_infer_lock so only one GPU YOLO call executes at a time.
+    """
+    print(f"[YOLO-WORKER] {camera_id}: started")
+    while not st.stop_event.is_set() and not cam_state.yolo_stop_event.is_set():
+        # If YOLO is globally disabled, clear stale boxes and idle
+        if not cfg.yolo_enabled or not cfg.yolo_classes:
+            with cam_state.lock:
+                if cam_state.last_yolo_boxes:
+                    cam_state.last_yolo_boxes = []
+                    cam_state.last_yolo_result = ""
+            time.sleep(0.5)
+            continue
+
+        with cam_state.lock:
+            frame = cam_state.last_frame_np
+
+        if frame is None:
+            time.sleep(0.1)
+            continue
+
+        try:
+            _, yolo_result, yolo_boxes = _yolo_filter(
+                frame, cfg.yolo_classes, cfg.yolo_confidence
+            )
+            with cam_state.lock:
+                cam_state.last_yolo_result = yolo_result
+                cam_state.last_yolo_boxes = yolo_boxes
+        except Exception as e:
+            print(f"[YOLO-WORKER] {camera_id}: error: {e}")
+            time.sleep(0.5)
+            continue
+
+        # Small yield so the GIL is released between inferences.
+        # YOLO11n on an RTX 5080 completes in <5 ms; sleeping 10 ms caps
+        # YOLO load at ~65 fps which is far above display rate.
+        time.sleep(0.01)
+
+    print(f"[YOLO-WORKER] {camera_id}: stopped")
 
 
 import re as _re
@@ -1346,12 +1404,13 @@ def infer_once_for_camera(cam_cfg: CameraConfig) -> None:
     image_b64 = encode_jpeg_b64(frame_np)
 
     # ── YOLO pre-filter ───────────────────────────────────────
+    # Boxes are kept fresh by the dedicated _yolo_worker thread.
+    # Here we only read the latest result to decide whether to run VLM.
     if cfg.yolo_enabled and cfg.yolo_classes:
-        should_infer, yolo_result, yolo_boxes = _yolo_filter(frame_np, cfg.yolo_classes, cfg.yolo_confidence)
         with cam_state.lock:
-            cam_state.last_yolo_result = yolo_result
-            cam_state.last_yolo_boxes = yolo_boxes
-        if not should_infer:
+            yolo_result = cam_state.last_yolo_result
+        # "skip" means no target class was detected in the last YOLO pass
+        if yolo_result == "skip":
             return
     # ──────────────────────────────────────────────────────────
 
@@ -1477,16 +1536,14 @@ def _infer_zone(zone_name: str, zone_cams: List[CameraConfig]) -> None:
         return
 
     # ── YOLO pre-filter for zone (OR logic: any camera hit → infer) ───
+    # Boxes are continuously updated by per-camera _yolo_worker threads;
+    # we only read last_yolo_result here to decide whether to call VLM.
     if cfg.yolo_enabled and cfg.yolo_classes and cam_states_in_zone:
         zone_hit = False
-        for cam_cfg_z, cam_state_z in cam_states_in_zone:
+        for _cam_cfg_z, cam_state_z in cam_states_in_zone:
             with cam_state_z.lock:
-                fnp = cam_state_z.last_frame_np
-            hit, yr, yb = _yolo_filter(fnp, cfg.yolo_classes, cfg.yolo_confidence)
-            with cam_state_z.lock:
-                cam_state_z.last_yolo_result = yr
-                cam_state_z.last_yolo_boxes = yb
-            if hit:
+                yr = cam_state_z.last_yolo_result
+            if yr != "skip":   # "" (not yet run) or detected classes → pass
                 zone_hit = True
         if not zone_hit:
             return
@@ -1687,12 +1744,13 @@ def _launch_capture_thread(cam_cfg: CameraConfig) -> None:
     """
     cam_id = cam_cfg.camera_id
 
-    # Signal any existing capture thread to stop
+    # Signal any existing capture and YOLO threads to stop
     with st.global_lock:
         old_state = st.cameras.get(cam_id)
 
     if old_state is not None:
         old_state.capture_stop_event.set()
+        old_state.yolo_stop_event.set()
 
     # Build new CameraState (fresh stop event), carry over inference history
     new_state = CameraState()
@@ -1719,6 +1777,16 @@ def _launch_capture_thread(cam_cfg: CameraConfig) -> None:
     new_state.capture_thread = t
     t.start()
 
+    # Dedicated YOLO worker for real-time bounding-box updates
+    yt = threading.Thread(
+        target=_yolo_worker,
+        args=(cam_id, new_state),
+        daemon=True,
+        name=f"yolo-{cam_id}",
+    )
+    new_state.yolo_thread = yt
+    yt.start()
+
 
 def start_threads() -> None:
     if st.running:
@@ -1742,6 +1810,7 @@ def stop_threads() -> None:
         cam_states = list(st.cameras.values())
     for cam_state in cam_states:
         cam_state.capture_stop_event.set()
+        cam_state.yolo_stop_event.set()
     st.running = False
 
 
