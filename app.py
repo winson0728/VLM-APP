@@ -933,11 +933,20 @@ def _start_ffmpeg_process(rtsp: str, w: int, h: int, use_gpu: bool,
                           codec: str = "h264") -> subprocess.Popen:
     """Launch ffmpeg subprocess that decodes RTSP → raw BGR24 frames on stdout.
     Output is capped at _DISPLAY_FPS to reduce pipe throughput and CPU encoding load.
-    codec: 'h264' uses h264_cuvid, 'h265' uses hevc_cuvid."""
+    codec: 'h264' uses h264_cuvid, 'h265' uses hevc_cuvid.
+
+    The scale filter explicitly overrides the input color matrix (in_color_matrix=bt601)
+    to work around cameras that embed incorrect GBR/reserved color-space metadata,
+    which would otherwise cause swscaler error -129 with nv12 output from CUVID.
+    """
     cmd = [_FFMPEG_BIN]
     if use_gpu:
         cuvid = "hevc_cuvid" if codec.lower() in ("h265", "hevc") else "h264_cuvid"
         cmd += ["-hwaccel", "cuda", "-hwaccel_device", _HW_DEVICE, "-c:v", cuvid]
+    # Force scale with explicit color-matrix override so swscaler handles any
+    # non-standard color-space metadata (e.g. csp:gbr on an NV12 stream).
+    vf = (f"scale=iw:ih:flags=bicubic:in_color_matrix=bt601:out_color_matrix=bt601,"
+          f"fps={_DISPLAY_FPS}")
     cmd += [
         "-rtsp_transport", "tcp",
         "-fflags", "nobuffer+discardcorrupt",
@@ -947,7 +956,7 @@ def _start_ffmpeg_process(rtsp: str, w: int, h: int, use_gpu: bool,
         "-probesize", "32",
         "-analyzeduration", "0",
         "-i", rtsp,
-        "-vf", f"fps={_DISPLAY_FPS}",   # limit output framerate
+        "-vf", vf,
         "-f", "rawvideo",
         "-pix_fmt", "bgr24",
         "-an",
@@ -975,11 +984,22 @@ def _capture_gpu(camera_id: str, rtsp_url: str, cam_state: CameraState,
       - The main loop picks up the latest frame, JPEG-encodes it, and
         stores it in cam_state.  This decouples pipe I/O from encoding.
     codec: 'h264' → h264_cuvid, 'h265' → hevc_cuvid.
+    Falls back to CPU (_capture_cv2) after 3 consecutive GPU decode failures.
     """
     cam_stop = cam_state.capture_stop_event
     cfg_codec = codec.lower()   # 'auto', 'h264', 'h265'
+    gpu_fail_count = 0
+    _GPU_FAIL_LIMIT = 3
 
     while not st.stop_event.is_set() and not cam_stop.is_set():
+        # Auto-fallback: too many consecutive GPU failures → switch to CPU
+        if gpu_fail_count >= _GPU_FAIL_LIMIT:
+            print(f"[CAPTURE-GPU] {camera_id}: GPU decode failed {gpu_fail_count}x, "
+                  f"falling back to CPU decode")
+            with cam_state.lock:
+                cam_state.last_error = ""
+            _capture_cv2(camera_id, rtsp_url, cam_state)
+            return
         w, h, detected_codec = _probe_stream_info(rtsp_url)
         if w == 0 or h == 0:
             with cam_state.lock:
@@ -1026,11 +1046,21 @@ def _capture_gpu(camera_id: str, rtsp_url: str, cam_state: CameraState,
                 if not reader_alive[0]:
                     stderr = ""
                     try:
-                        stderr = proc.stderr.read(500).decode(errors="replace") if proc.stderr else ""
+                        stderr = proc.stderr.read(2000).decode(errors="replace") if proc.stderr else ""
                     except Exception:
                         pass
+                    # Detect GPU-incompatible streams (swscaler color-space error, etc.)
+                    is_gpu_error = any(kw in stderr for kw in (
+                        "swscaler", "Unsupported input", "nv12", "hevc_cuvid", "h264_cuvid",
+                        "hwaccel", "CUDA", "cuvid",
+                    ))
+                    if is_gpu_error:
+                        gpu_fail_count += 1
+                        print(f"[CAPTURE-GPU] {camera_id}: GPU error #{gpu_fail_count}: {stderr[:120]}")
+                    else:
+                        gpu_fail_count = 0   # network hiccup, not a GPU issue
                     with cam_state.lock:
-                        cam_state.last_error = f"GPU decode stopped: {stderr[:120]}" if stderr else "GPU decode stopped"
+                        cam_state.last_error = f"GPU decode stopped: {stderr[:200]}" if stderr else "GPU decode stopped"
                     break
 
                 # Grab latest frame (non-blocking)
@@ -1039,6 +1069,7 @@ def _capture_gpu(camera_id: str, rtsp_url: str, cam_state: CameraState,
                     latest_frame[0] = None  # consumed
 
                 if frame is not None:
+                    gpu_fail_count = 0  # at least one good frame → GPU is working
                     try:
                         ts = time.time()
                         # YOLO overlay on display frame (clean frame stays for VLM)
