@@ -351,6 +351,7 @@ class CameraConfig(BaseModel):
     priority: int = Field(default=1, ge=1, le=10, description="Round-robin weight (higher = more frequent).")
     snapshot_enabled: Optional[bool] = Field(default=None, description="Override global snapshot_enabled; None inherits.")
     zone: str = Field(default="", description="Zone/room name. Cameras in the same zone do joint multi-view inference.")
+    video_codec: str = Field(default="h264", description="RTSP video codec: 'h264' or 'h265'.")
     # ONVIF PTZ (optional, per-camera)
     onvif_host: str = Field(default="")
     onvif_port: int = Field(default=2020, ge=1, le=65535)
@@ -368,6 +369,7 @@ class CameraUpdate(BaseModel):
     priority: Optional[int] = Field(default=None, ge=1, le=10)
     snapshot_enabled: Optional[bool] = None
     zone: Optional[str] = None
+    video_codec: Optional[str] = None
     onvif_host: Optional[str] = None
     onvif_port: Optional[int] = Field(default=None, ge=1, le=65535)
     onvif_username: Optional[str] = None
@@ -919,12 +921,15 @@ def _probe_resolution(rtsp: str) -> tuple[int, int]:
 _DISPLAY_FPS = int(os.getenv("VLM_DISPLAY_FPS", "15"))
 
 
-def _start_ffmpeg_process(rtsp: str, w: int, h: int, use_gpu: bool) -> subprocess.Popen:
+def _start_ffmpeg_process(rtsp: str, w: int, h: int, use_gpu: bool,
+                          codec: str = "h264") -> subprocess.Popen:
     """Launch ffmpeg subprocess that decodes RTSP → raw BGR24 frames on stdout.
-    Output is capped at _DISPLAY_FPS to reduce pipe throughput and CPU encoding load."""
+    Output is capped at _DISPLAY_FPS to reduce pipe throughput and CPU encoding load.
+    codec: 'h264' uses h264_cuvid, 'h265' uses hevc_cuvid."""
     cmd = [_FFMPEG_BIN]
     if use_gpu:
-        cmd += ["-hwaccel", "cuda", "-hwaccel_device", _HW_DEVICE, "-c:v", "h264_cuvid"]
+        cuvid = "hevc_cuvid" if codec.lower() in ("h265", "hevc") else "h264_cuvid"
+        cmd += ["-hwaccel", "cuda", "-hwaccel_device", _HW_DEVICE, "-c:v", cuvid]
     cmd += [
         "-rtsp_transport", "tcp",
         "-fflags", "nobuffer+discardcorrupt",
@@ -952,7 +957,8 @@ def _start_ffmpeg_process(rtsp: str, w: int, h: int, use_gpu: bool) -> subproces
 # Worker threads
 # ──────────────────────────────────────────────────────────────
 
-def _capture_gpu(camera_id: str, rtsp_url: str, cam_state: CameraState) -> None:
+def _capture_gpu(camera_id: str, rtsp_url: str, cam_state: CameraState,
+                 codec: str = "h264") -> None:
     """Capture loop using subprocess ffmpeg with NVIDIA CUVID GPU decoding.
 
     Architecture:
@@ -960,8 +966,10 @@ def _capture_gpu(camera_id: str, rtsp_url: str, cam_state: CameraState) -> None:
         into a single-slot buffer (always keeps the latest frame).
       - The main loop picks up the latest frame, JPEG-encodes it, and
         stores it in cam_state.  This decouples pipe I/O from encoding.
+    codec: 'h264' → h264_cuvid, 'h265' → hevc_cuvid.
     """
     cam_stop = cam_state.capture_stop_event
+    cuvid_name = "hevc_cuvid" if codec.lower() in ("h265", "hevc") else "h264_cuvid"
 
     while not st.stop_event.is_set() and not cam_stop.is_set():
         w, h = _probe_resolution(rtsp_url)
@@ -972,8 +980,8 @@ def _capture_gpu(camera_id: str, rtsp_url: str, cam_state: CameraState) -> None:
             continue
 
         frame_bytes = w * h * 3
-        proc = _start_ffmpeg_process(rtsp_url, w, h, use_gpu=True)
-        print(f"[CAPTURE-GPU] {camera_id}: started ffmpeg CUVID  {w}x{h}  @{_DISPLAY_FPS}fps")
+        proc = _start_ffmpeg_process(rtsp_url, w, h, use_gpu=True, codec=codec)
+        print(f"[CAPTURE-GPU] {camera_id}: started ffmpeg {cuvid_name}  {w}x{h}  @{_DISPLAY_FPS}fps")
         with cam_state.lock:
             cam_state.last_error = ""
 
@@ -1129,12 +1137,13 @@ def _capture_cv2(camera_id: str, rtsp_url: str, cam_state: CameraState) -> None:
         time.sleep(1.0)
 
 
-def capture_worker(camera_id: str, rtsp_url: str, cam_state: CameraState) -> None:
+def capture_worker(camera_id: str, rtsp_url: str, cam_state: CameraState,
+                   codec: str = "h264") -> None:
     """Per-camera RTSP capture thread. Uses GPU if available, CPU fallback."""
     if not rtsp_url.strip():
         return
     if _FFMPEG_HAS_CUDA:
-        _capture_gpu(camera_id, rtsp_url, cam_state)
+        _capture_gpu(camera_id, rtsp_url, cam_state, codec=codec)
     else:
         _capture_cv2(camera_id, rtsp_url, cam_state)
 
@@ -1660,6 +1669,7 @@ def _launch_capture_thread(cam_cfg: CameraConfig) -> None:
     t = threading.Thread(
         target=capture_worker,
         args=(cam_id, cam_cfg.rtsp_url, new_state),
+        kwargs={"codec": cam_cfg.video_codec or "h264"},
         daemon=True,
         name=f"capture-{cam_id}",
     )
