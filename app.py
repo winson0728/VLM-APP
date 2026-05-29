@@ -403,9 +403,15 @@ class GlobalConfig(BaseModel):
     video_fps: int = Field(default=5, ge=1, le=15, description="Video recording FPS.")
     video_clip_dir: str = Field(default="video_clips", description="Directory for video clips.")
     trigger_danger_level: int = Field(default=5, ge=1, le=10, description="Danger level threshold for alert/recording.")
-    # Signal light
-    alert_light_enabled: bool = Field(default=False, description="Enable signal light API on alert state change.")
-    alert_light_url: str = Field(default="http://10.22.22.168:8080/api/signal", description="Signal light API endpoint URL.")
+    # Alarm trigger (signal light + speech via external alarm server)
+    alert_light_enabled: bool = Field(default=False, description="Enable external alarm API on alert state change.")
+    alert_light_url: str = Field(default="http://192.168.106.119:5000", description="Alarm server base URL (no path). Endpoints /api/alarm/trigger and /api/alarm/stop are appended automatically.")
+    alarm_message: str = Field(default="Warning. Security alarm triggered.", description="Speech message played by alarm.")
+    alarm_light_mode: str = Field(default="blink", description="Light mode: 'blink' or 'on'.")
+    alarm_repeat_speech: bool = Field(default=True, description="Whether alarm speech repeats.")
+    alarm_speech_interval: float = Field(default=10.0, description="Seconds between speech repetitions.")
+    alarm_blink_interval: float = Field(default=0.5, description="Light blink interval in seconds.")
+    alarm_volume: float = Field(default=1.0, description="Speech volume 0.0-1.0.")
 
 
 # ──────────────────────────────────────────────────────────────
@@ -532,31 +538,51 @@ _prev_global_alert: bool = False
 _alert_light_lock = threading.Lock()
 
 
+def _alarm_base_url(url: str) -> str:
+    """Strip trailing slash + any legacy /api/* path so we have a clean base URL."""
+    u = (url or "").strip().rstrip("/")
+    for suffix in ("/api/alarm/trigger", "/api/alarm/stop",
+                   "/api/alarm/status", "/api/signal"):
+        if u.endswith(suffix):
+            u = u[: -len(suffix)]
+            break
+    return u
+
+
+def _alarm_trigger_payload() -> dict:
+    """Build the alarm trigger JSON payload from current config."""
+    return {
+        "message": cfg.alarm_message or "Warning. Security alarm triggered.",
+        "light_mode": cfg.alarm_light_mode or "blink",
+        "repeat_speech": bool(cfg.alarm_repeat_speech),
+        "speech_interval": float(cfg.alarm_speech_interval),
+        "blink_interval": float(cfg.alarm_blink_interval),
+        "volume": float(cfg.alarm_volume),
+    }
+
+
 def _notify_signal_light(alert_on: bool) -> None:
-    """Call the external signal light API. Runs in a daemon thread (fire-and-forget)."""
+    """Call the external alarm API. Runs in a daemon thread (fire-and-forget).
+
+    alert_on=True  → POST {base}/api/alarm/trigger with full payload
+    alert_on=False → POST {base}/api/alarm/stop    (no body)
+    """
     if not cfg.alert_light_enabled or not cfg.alert_light_url:
+        return
+    base = _alarm_base_url(cfg.alert_light_url)
+    if not base:
         return
     try:
         if alert_on:
-            payload = {
-                "command": "SET_LIGHT",
-                "color": "RED",
-                "message": "alarm",
-                "blink": True,
-                "durationSec": 0,
-            }
+            url = f"{base}/api/alarm/trigger"
+            r = requests.post(url, json=_alarm_trigger_payload(), timeout=3)
+            print(f"[ALARM] 🔴 TRIGGER → {url} → {r.status_code}")
         else:
-            payload = {
-                "command": "SET_LIGHT",
-                "color": "GREEN",
-                "message": "In operation",
-                "blink": False,
-                "durationSec": 0,
-            }
-        r = requests.post(cfg.alert_light_url, json=payload, timeout=3)
-        print(f"[LIGHT] {'🔴 RED blink' if alert_on else '🟢 GREEN'} → {r.status_code}")
+            url = f"{base}/api/alarm/stop"
+            r = requests.post(url, timeout=3)
+            print(f"[ALARM] 🟢 STOP → {url} → {r.status_code}")
     except Exception as e:
-        print(f"[LIGHT] signal light error: {e}")
+        print(f"[ALARM] error: {e}")
 
 
 def _update_signal_light() -> None:
@@ -2018,37 +2044,48 @@ def camera_clear_alert(camera_id: str):
 
 @app.post("/signal_light/test")
 async def test_signal_light(request: Request):
-    """Synchronous test: bypasses alert_light_enabled, returns actual API result."""
+    """Synchronous test: bypasses alert_light_enabled, returns actual API result.
+
+    Accepts {alert_on: bool, url?: str} where url is the *base URL* of the
+    alarm server (no path).
+    """
     body = await request.json()
     alert_on = bool(body.get("alert_on", True))
-    # Use URL from request body if provided (so UI can test with unsaved value)
-    url = (body.get("url") or cfg.alert_light_url or "").strip()
-    if not url:
+    raw_url = (body.get("url") or cfg.alert_light_url or "").strip()
+    base = _alarm_base_url(raw_url)
+    if not base:
         return JSONResponse({"ok": False, "error": "alert_light_url is empty"}, status_code=400)
     try:
         if alert_on:
-            payload = {
-                "command": "SET_LIGHT",
-                "color": "RED",
-                "message": "alarm",
-                "blink": True,
-                "durationSec": 0,
-            }
+            full_url = f"{base}/api/alarm/trigger"
+            r = requests.post(full_url, json=_alarm_trigger_payload(), timeout=5)
         else:
-            payload = {
-                "command": "SET_LIGHT",
-                "color": "GREEN",
-                "message": "In operation",
-                "blink": False,
-                "durationSec": 0,
-            }
-        r = requests.post(url, json=payload, timeout=5)
-        print(f"[LIGHT TEST] {'RED blink' if alert_on else 'GREEN'} → {r.status_code} {r.text[:80]}")
+            full_url = f"{base}/api/alarm/stop"
+            r = requests.post(full_url, timeout=5)
+        print(f"[ALARM TEST] {'TRIGGER' if alert_on else 'STOP'} → {full_url} → {r.status_code} {r.text[:80]}")
         return JSONResponse({"ok": True, "status_code": r.status_code,
-                             "alert_on": alert_on, "url": url})
+                             "alert_on": alert_on, "url": full_url,
+                             "response": r.text[:200]})
     except Exception as e:
-        print(f"[LIGHT TEST] error: {e}")
-        return JSONResponse({"ok": False, "error": str(e), "url": url}, status_code=502)
+        print(f"[ALARM TEST] error: {e}")
+        return JSONResponse({"ok": False, "error": str(e), "url": base}, status_code=502)
+
+
+@app.get("/signal_light/status")
+def signal_light_status():
+    """Pass-through GET to the external alarm server's /api/alarm/status."""
+    base = _alarm_base_url(cfg.alert_light_url)
+    if not base:
+        return JSONResponse({"ok": False, "error": "alert_light_url is empty"}, status_code=400)
+    try:
+        r = requests.get(f"{base}/api/alarm/status", timeout=3)
+        try:
+            data = r.json()
+        except Exception:
+            data = {"raw": r.text[:200]}
+        return JSONResponse({"ok": True, "status_code": r.status_code, "data": data})
+    except Exception as e:
+        return JSONResponse({"ok": False, "error": str(e)}, status_code=502)
 
 
 @app.post("/cameras/{camera_id}/onvif/patrol/start")
