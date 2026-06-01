@@ -697,6 +697,8 @@ _mqtt_lock = threading.Lock()
 _mqtt_last_state = "?"          # last LED state we asked for ("r","g","b","rgb","")
 _mqtt_recent: "deque" = deque(maxlen=50)   # ring of {ts, topic, payload}
 _mqtt_started = False
+_mqtt_error: str = ""           # last startup error (surfaced to UI)
+_mqtt_phase: str = "idle"       # "idle" | "broker_start" | "client_connect" | "subscribe" | "ready"
 _MQTT_INTERNAL_CLIENT_ID = "vlm-app-internal"
 
 
@@ -714,9 +716,16 @@ def _mqtt_record_message(topic: str, payload: bytes) -> None:
 try:
     import amqtt  # noqa: F401
     _MQTT_AVAILABLE = True
-except Exception:
+    # Quiet amqtt's chatty default logger (INFO).  Without this we get a
+    # message per CONNECT/SUBSCRIBE/PUBLISH that fills the journal at the
+    # configured publish rate.
+    import logging as _logging
+    for _name in ("amqtt", "amqtt.broker", "amqtt.client",
+                  "amqtt.mqtt.protocol.handler", "transitions.core"):
+        _logging.getLogger(_name).setLevel(_logging.WARNING)
+except Exception as _e:
     _MQTT_AVAILABLE = False
-    print("[MQTT] amqtt not installed — broker disabled. `pip install amqtt` to enable.")
+    print(f"[MQTT] amqtt not installed ({_e}) — broker disabled. `pip install amqtt` to enable.")
 
 
 async def _mqtt_consume_forever() -> None:
@@ -737,12 +746,22 @@ async def _mqtt_consume_forever() -> None:
 
 
 async def _mqtt_main(port: int, topic: str) -> None:
-    """Start broker + internal pub/sub client. Runs forever inside its own loop."""
-    global _mqtt_broker, _mqtt_pub_client
+    """Start broker + internal pub/sub client. Runs forever inside its own loop.
+
+    Phases are tracked in `_mqtt_phase` and any failure is recorded in
+    `_mqtt_error` so the UI can surface a concrete reason instead of
+    sitting on "starting" forever.
+    """
+    global _mqtt_broker, _mqtt_pub_client, _mqtt_error, _mqtt_phase
     from amqtt.broker import Broker  # noqa: PLC0415
-    from amqtt.client import MQTTClient  # noqa: PLC0415
+    from amqtt.client import MQTTClient, ConnectException  # noqa: PLC0415
     from amqtt.mqtt.constants import QOS_0  # noqa: PLC0415
 
+    # ── Phase 1: bind broker ─────────────────────────────────
+    _mqtt_phase = "broker_start"
+    # Minimal config — let amqtt use its defaults for auth/plugins, just
+    # turn anonymous on. Overriding `"plugins": []` in earlier revisions
+    # silently disabled the auth handler and blocked connections.
     config = {
         "listeners": {
             "default": {
@@ -752,26 +771,57 @@ async def _mqtt_main(port: int, topic: str) -> None:
             },
         },
         "sys_interval": 0,
-        "auth": {"allow-anonymous": True, "plugins": []},
+        "auth": {"allow-anonymous": True},
         "topic-check": {"enabled": False},
     }
-    _mqtt_broker = Broker(config)
-    await _mqtt_broker.start()
-    print(f"[MQTT-BROKER] listening on 0.0.0.0:{port}")
+    try:
+        _mqtt_broker = Broker(config)
+        await _mqtt_broker.start()
+        print(f"[MQTT-BROKER] listening on 0.0.0.0:{port}")
+    except OSError as e:
+        _mqtt_error = f"bind {port} failed: {e}"
+        print(f"[MQTT-BROKER] {_mqtt_error}")
+        return
+    except Exception as e:
+        _mqtt_error = f"broker start failed: {type(e).__name__}: {e}"
+        print(f"[MQTT-BROKER] {_mqtt_error}")
+        return
 
-    # Internal client — used both to publish color commands AND to keep
-    # a recent-messages log of what is happening on the topic.
-    _mqtt_pub_client = MQTTClient(client_id=_MQTT_INTERNAL_CLIENT_ID)
-    await _mqtt_pub_client.connect(f"mqtt://127.0.0.1:{port}/")
-    # Subscribe to topic + sub-topics so device status reports are visible too
+    # ── Phase 2: internal client connects to own broker ──────
+    _mqtt_phase = "client_connect"
+    last_err: Optional[str] = None
+    for attempt in range(10):
+        try:
+            client = MQTTClient(client_id=_MQTT_INTERNAL_CLIENT_ID)
+            await client.connect(f"mqtt://127.0.0.1:{port}/")
+            _mqtt_pub_client = client
+            last_err = None
+            break
+        except (ConnectException, OSError, Exception) as e:
+            last_err = f"{type(e).__name__}: {e}"
+            await asyncio.sleep(0.3 * (attempt + 1))
+    if _mqtt_pub_client is None:
+        _mqtt_error = f"internal client connect failed: {last_err or 'unknown'}"
+        print(f"[MQTT] {_mqtt_error}")
+        return
+
+    # ── Phase 3: subscribe ───────────────────────────────────
+    _mqtt_phase = "subscribe"
     norm_topic = topic if topic.startswith("/") else "/" + topic
-    await _mqtt_pub_client.subscribe([
-        (norm_topic, QOS_0),
-        (norm_topic.rstrip("/") + "/#", QOS_0),
-    ])
-    print(f"[MQTT] internal client subscribed to {norm_topic} (+ /#)")
+    try:
+        await _mqtt_pub_client.subscribe([
+            (norm_topic, QOS_0),
+            (norm_topic.rstrip("/") + "/#", QOS_0),
+        ])
+        print(f"[MQTT] internal client subscribed to {norm_topic} (+ /#)")
+    except Exception as e:
+        _mqtt_error = f"subscribe failed: {type(e).__name__}: {e}"
+        print(f"[MQTT] {_mqtt_error}")
+        # Not fatal — publishing still works, just no recent-msg log.
 
-    # Consume incoming messages in the background
+    # ── Phase 4: ready ───────────────────────────────────────
+    _mqtt_phase = "ready"
+    _mqtt_error = ""    # clear any prior transient error
     asyncio.create_task(_mqtt_consume_forever())
 
     # Idle — keep the loop alive
@@ -781,16 +831,24 @@ async def _mqtt_main(port: int, topic: str) -> None:
 
 def _mqtt_thread_target(port: int, topic: str) -> None:
     """Run the asyncio loop dedicated to MQTT in a daemon thread."""
-    global _mqtt_loop
+    global _mqtt_loop, _mqtt_error, _mqtt_phase, _mqtt_started, _mqtt_pub_client, _mqtt_broker
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
     _mqtt_loop = loop
     try:
         loop.run_until_complete(_mqtt_main(port, topic))
     except Exception as e:
-        print(f"[MQTT-BROKER] crashed: {e}")
+        _mqtt_error = f"loop crashed: {type(e).__name__}: {e}"
+        print(f"[MQTT-BROKER] {_mqtt_error}")
     finally:
+        # If we exited (start failure), allow the user to retry
         _mqtt_loop = None
+        _mqtt_pub_client = None
+        _mqtt_broker = None
+        _mqtt_started = False
+        if _mqtt_phase != "ready":
+            print(f"[MQTT-BROKER] startup aborted in phase '{_mqtt_phase}'")
+        _mqtt_phase = "idle"
 
 
 def mqtt_start_broker() -> bool:
@@ -876,6 +934,8 @@ def mqtt_broker_status() -> dict:
         "enabled": bool(cfg.mqtt_broker_enabled),
         "running": running,
         "available": _MQTT_AVAILABLE,
+        "phase": _mqtt_phase,
+        "error": _mqtt_error,
         "port": cfg.mqtt_broker_port,
         "topic": cfg.mqtt_topic or "/Sos",
         "client_count": clients,
@@ -2193,6 +2253,19 @@ def _on_app_startup():
 def mqtt_status():
     """Return broker status, registered devices, recent message log."""
     return JSONResponse(mqtt_broker_status())
+
+
+@app.post("/mqtt/restart")
+def mqtt_restart():
+    """Retry MQTT broker startup (after fixing a port conflict, etc.)."""
+    global _mqtt_started, _mqtt_error, _mqtt_phase
+    if _mqtt_loop is not None:
+        return JSONResponse({"ok": False, "error": "Broker already running. Restart service to change port."}, status_code=400)
+    _mqtt_started = False
+    _mqtt_error = ""
+    _mqtt_phase = "idle"
+    ok = mqtt_start_broker()
+    return JSONResponse({"ok": ok, "error": _mqtt_error})
 
 
 @app.post("/mqtt/test")

@@ -1226,6 +1226,8 @@ const I18N = {
   'mqtt.disabled':'未啟用','mqtt.running':'運行中','mqtt.starting':'啟動中',
   'mqtt.notInstalled':'amqtt 套件未安裝 (pip install amqtt)',
   'mqtt.noMsg':'尚無訊息','msg.sending':'送出中…',
+  'mqtt.restarting':'重新啟動中…','mqtt.restarted':'已重新啟動',
+  'btn.retry':'重試',
   'form.ollamaUrl':'Ollama API URL','form.model':'Model','form.version':'Version',
   'form.v10':'V1.0 Basic','form.v11':'V1.1 Alerts','form.autoSnap':'Auto Snapshot',
   'form.snapKeyword':'Snapshot keyword','form.alertKw':'Alert keywords (V1.1, 逗號分隔)',
@@ -1301,6 +1303,8 @@ const I18N = {
   'mqtt.disabled':'disabled','mqtt.running':'running','mqtt.starting':'starting',
   'mqtt.notInstalled':'amqtt package not installed (pip install amqtt)',
   'mqtt.noMsg':'no messages','msg.sending':'sending…',
+  'mqtt.restarting':'restarting…','mqtt.restarted':'restarted',
+  'btn.retry':'Retry',
   'form.ollamaUrl':'Ollama API URL','form.model':'Model','form.version':'Version',
   'form.v10':'V1.0 Basic','form.v11':'V1.1 Alerts','form.autoSnap':'Auto Snapshot',
   'form.snapKeyword':'Snapshot keyword','form.alertKw':'Alert keywords (V1.1, comma-separated)',
@@ -1376,6 +1380,8 @@ const I18N = {
   'mqtt.disabled':'無効','mqtt.running':'稼働中','mqtt.starting':'起動中',
   'mqtt.notInstalled':'amqtt 未インストール (pip install amqtt)',
   'mqtt.noMsg':'メッセージなし','msg.sending':'送信中…',
+  'mqtt.restarting':'再起動中…','mqtt.restarted':'再起動完了',
+  'btn.retry':'再試行',
   'form.ollamaUrl':'Ollama API URL','form.model':'Model','form.version':'バージョン',
   'form.v10':'V1.0 基本','form.v11':'V1.1 アラート','form.autoSnap':'自動スナップショット',
   'form.snapKeyword':'スナップショットキーワード','form.alertKw':'アラートキーワード（V1.1, カンマ区切り）',
@@ -2658,6 +2664,28 @@ async function mqttTest(color) {
   setTimeout(() => msgEl.innerText = '', 5000);
 }
 
+async function mqttRestart() {
+  const msgEl = document.getElementById('mqttTestMsg');
+  msgEl.style.color = '#888';
+  msgEl.innerText = '⏳ ' + t('mqtt.restarting');
+  try {
+    const r = await fetch('/mqtt/restart', { method: 'POST' });
+    const data = await r.json().catch(() => ({}));
+    if (data.ok) {
+      msgEl.style.color = '#16a34a';
+      msgEl.innerText = '🟢 ' + t('mqtt.restarted');
+    } else {
+      msgEl.style.color = '#dc3545';
+      msgEl.innerText = '✗ ' + (data.error || ('HTTP ' + r.status));
+    }
+  } catch(e) {
+    msgEl.style.color = '#dc3545';
+    msgEl.innerText = '✗ ' + e.message;
+  }
+  setTimeout(refreshMqttStatus, 1500);
+  setTimeout(() => msgEl.innerText = '', 6000);
+}
+
 async function refreshMqttStatus() {
   try {
     const r = await fetch('/mqtt/status', { cache: 'no-store' });
@@ -2674,6 +2702,15 @@ async function refreshMqttStatus() {
       } else if (s.running) {
         run.textContent = '🟢 ' + t('mqtt.running') + ' (' + s.port + ')';
         run.style.color = '#16a34a';
+      } else if (s.error) {
+        // Startup aborted — show concrete reason + offer retry.
+        run.innerHTML = '🔴 ' + esc(s.error)
+          + ' <button class="btn btn-secondary btn-sm" onclick="mqttRestart()" style="margin-left:6px;padding:2px 8px">'
+          + esc(t('btn.retry')) + '</button>';
+        run.style.color = '#dc3545';
+      } else if (s.phase && s.phase !== 'idle' && s.phase !== 'ready') {
+        run.textContent = '🟡 ' + t('mqtt.starting') + ' (' + s.phase + ')';
+        run.style.color = '#d97706';
       } else {
         run.textContent = '🟡 ' + t('mqtt.starting');
         run.style.color = '#d97706';
