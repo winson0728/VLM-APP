@@ -341,6 +341,72 @@
       text-align: center;
       padding: 24px;
     }
+
+    /* Multi-camera grid inside the left column (zone mode) */
+    .focus-img-grid {
+      display: grid;
+      gap: 6px;
+      width: 100%;
+      height: 100%;
+      grid-auto-rows: 1fr;
+    }
+    .focus-img-grid.n-1 { grid-template-columns: 1fr; }
+    .focus-img-grid.n-2 { grid-template-columns: 1fr 1fr; }
+    .focus-img-grid.n-3,
+    .focus-img-grid.n-4 { grid-template-columns: 1fr 1fr; }
+    .focus-img-grid.n-5,
+    .focus-img-grid.n-6 { grid-template-columns: 1fr 1fr 1fr; }
+    .focus-img-grid.n-many { grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); }
+    .focus-img-cell {
+      background: #0d1117;
+      border-radius: 8px;
+      overflow: hidden;
+      position: relative;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 0;
+      min-width: 0;
+    }
+    .focus-img-cell img {
+      max-width: 100%;
+      max-height: 100%;
+      object-fit: contain;
+      display: block;
+      transition: opacity 0.25s ease;
+    }
+    .focus-img-cell-label {
+      position: absolute;
+      bottom: 4px;
+      left: 6px;
+      font-size: 11px;
+      color: #fff;
+      background: rgba(0,0,0,0.55);
+      padding: 2px 7px;
+      border-radius: 5px;
+      pointer-events: none;
+      max-width: calc(100% - 12px);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .focus-img-cell-status {
+      position: absolute;
+      top: 6px;
+      right: 6px;
+      width: 9px; height: 9px;
+      border-radius: 50%;
+    }
+    .focus-img-cell-empty {
+      color: #6b7280;
+      font-size: 12px;
+      text-align: center;
+      padding: 8px;
+    }
+    .focus-img-cell.alert {
+      outline: 2px solid var(--alert);
+      outline-offset: -2px;
+    }
     .focus-text-card {
       display: flex;
       flex-direction: column;
@@ -919,7 +985,7 @@
             <span class="label" data-i18n="detail.vlmReply">VLM 回應</span>
             <span class="hint" id="focusFrameAge" style="font-size:11px"></span>
           </div>
-          <pre class="focus-reply empty" id="focusReply" data-i18n="focus.noReply">尚未推論</pre>
+          <pre class="focus-reply empty" id="focusReply">—</pre>
           <div class="focus-err" id="focusErr" style="display:none"></div>
         </div>
       </div>
@@ -1085,7 +1151,8 @@ const I18N = {
   'btn.addCam':'+ 新增','btn.save':'儲存','btn.cancel':'取消','btn.deleteCam':'刪除攝影機',
   'btn.edit':'編輯','btn.clearAlert':'清除警報','btn.ptzStart':'▶ 啟動','btn.ptzStop':'■ 停止',
   'tab.grid':'Grid 全覽','tab.detail':'Detail 詳細','tab.focus':'📺 聚焦','tab.snapshots':'Snapshots 快照','tab.clips':'Clips 錄影',
-  'focus.pickCam':'— 選擇攝影機 —','focus.selectCam':'請從上方下拉選單選擇攝影機','focus.noReply':'尚未推論',
+  'focus.pickCam':'— 選擇攝影機 / 區域 —','focus.selectCam':'請從上方下拉選單選擇攝影機或區域','focus.noReply':'尚未推論',
+  'focus.zones':'區域（多視角）','focus.cameras':'單一攝影機',
   'btn.oneshot':'Oneshot','btn.editIcon':'✎ 編輯',
   'panel.settings':'設定','panel.scenario':'偵測場景','panel.globalConfig':'全域設定',
   'panel.ollamaModelVer':'Ollama / Model / 版本','panel.yolo':'YOLO 預篩選設定',
@@ -1148,7 +1215,8 @@ const I18N = {
   'btn.addCam':'+ Add','btn.save':'Save','btn.cancel':'Cancel','btn.deleteCam':'Delete Camera',
   'btn.edit':'Edit','btn.clearAlert':'Clear Alert','btn.ptzStart':'▶ Start','btn.ptzStop':'■ Stop',
   'tab.grid':'Grid','tab.detail':'Detail','tab.focus':'📺 Focus','tab.snapshots':'Snapshots','tab.clips':'Clips',
-  'focus.pickCam':'— Select camera —','focus.selectCam':'Pick a camera from the dropdown above','focus.noReply':'No inference yet',
+  'focus.pickCam':'— Select camera / zone —','focus.selectCam':'Pick a camera or zone from the dropdown above','focus.noReply':'No inference yet',
+  'focus.zones':'Zones (multi-view)','focus.cameras':'Single cameras',
   'btn.oneshot':'Oneshot','btn.editIcon':'✎ Edit',
   'panel.settings':'Settings','panel.scenario':'Detection Scenarios','panel.globalConfig':'Global Config',
   'panel.ollamaModelVer':'Ollama / Model / Version','panel.yolo':'YOLO Pre-filter',
@@ -1211,7 +1279,8 @@ const I18N = {
   'btn.addCam':'+ 追加','btn.save':'保存','btn.cancel':'キャンセル','btn.deleteCam':'カメラ削除',
   'btn.edit':'編集','btn.clearAlert':'アラート解除','btn.ptzStart':'▶ 開始','btn.ptzStop':'■ 停止',
   'tab.grid':'グリッド','tab.detail':'詳細','tab.focus':'📺 フォーカス','tab.snapshots':'スナップショット','tab.clips':'録画',
-  'focus.pickCam':'— カメラ選択 —','focus.selectCam':'上のドロップダウンからカメラを選んでください','focus.noReply':'まだ推論なし',
+  'focus.pickCam':'— カメラ / ゾーン選択 —','focus.selectCam':'上のドロップダウンからカメラまたはゾーンを選んでください','focus.noReply':'まだ推論なし',
+  'focus.zones':'ゾーン（マルチビュー）','focus.cameras':'単一カメラ',
   'btn.oneshot':'Oneshot','btn.editIcon':'✎ 編集',
   'panel.settings':'設定','panel.scenario':'検知シナリオ','panel.globalConfig':'グローバル設定',
   'panel.ollamaModelVer':'Ollama / Model / バージョン','panel.yolo':'YOLO プレフィルタ',
@@ -1298,6 +1367,12 @@ function setLang(lang) {
   renderCamList(); renderGrid();
   if (typeof _detailId !== 'undefined') { _detailId = null; }
   if (curView === 'detail') renderDetail();
+  if (curView === 'focus') {
+    // Force a full Focus re-render so text labels reflect new language.
+    Object.assign(_focusLast, { id: null, kind: null, gridKey: '', frames: {}, reply: '', err: '', alert: '', st: '', ms: '', ra: '', fa: '' });
+    refreshFocusCamSelect();
+    renderFocus();
+  }
   if (typeof renderScenarioCards === 'function') renderScenarioCards(_activeScenario);
   // Refresh prompt textarea to the new language version
   if (typeof _activeScenario !== 'undefined' && _activeScenario && _activeScenario !== 'custom') {
@@ -1509,6 +1584,11 @@ function renderCamList() {
 
 function selectCam(id) {
   selId = id;
+  // Keep Focus-mode selection in sync: clicking a sidebar camera switches
+  // Focus to that single camera (overrides any zone choice).
+  _focusKind = 'cam';
+  _focusZone = '';
+  _focusLast.kind = null;   // force diff cache reset
   renderCamList();
   setView('detail');
 }
@@ -1826,65 +1906,263 @@ function renderDetail() {
 
 // ╔══════════════════════════════════════════════════════════╗
 // ║  Focus View (聚焦模式)                                     ║
-// ║  Image left + inference text right, fits viewport.        ║
-// ║  Reuses selId — selecting in any view keeps state synced. ║
+// ║  Image(s) left + inference text right, fits viewport.     ║
+// ║  Supports single camera OR a zone (multi-camera at one    ║
+// ║  location). The dropdown encodes selection as a prefix    ║
+// ║  string: "cam:<id>" or "zone:<name>".                     ║
 // ╚══════════════════════════════════════════════════════════╝
+// Focus target state.  When kind==='zone', selId points to the *primary*
+// camera in the zone (used for Edit/Clear-Alert per-cam ops); for a zone
+// pick we read the unified inference text from statusD.zones[focusZone].
+let _focusKind = 'cam';          // 'cam' | 'zone'
+let _focusZone = '';             // active zone name when kind==='zone'
+let _lastFocusZoneKey = '';      // tracks zone set so we can refresh dropdown
+
+function _zoneCamIds(zname) {
+  // Prefer the live server view (which knows what zones currently exist)
+  const zoneRec = statusD.zones?.[zname];
+  if (zoneRec?.camera_ids?.length) return zoneRec.camera_ids;
+  // Fallback: derive from camera config
+  return camCfgs.filter(c => (c.zone || '') === zname).map(c => c.camera_id);
+}
+
+function _zonesFromCfg() {
+  // Distinct, non-empty zone names from camera config
+  const set = new Set();
+  for (const c of camCfgs) { if (c.zone) set.add(c.zone); }
+  return Array.from(set).sort();
+}
+
 function refreshFocusCamSelect() {
   const sel = document.getElementById('focusCamSelect');
   if (!sel) return;
-  const cur = selId || '';
-  const opts = camCfgs.map(c =>
-    `<option value="${esc(c.camera_id)}"${c.camera_id===cur?' selected':''}>${esc(c.label||c.camera_id)}</option>`
-  ).join('');
-  sel.innerHTML = `<option value="">${t('focus.pickCam')}</option>` + opts;
+  const curKind = _focusKind, curId = selId || '', curZone = _focusZone || '';
+
+  const zones = _zonesFromCfg();
+  let html = `<option value="">${t('focus.pickCam')}</option>`;
+
+  if (zones.length) {
+    html += `<optgroup label="📊 ${t('focus.zones')}">`;
+    for (const z of zones) {
+      const camIds = _zoneCamIds(z);
+      const isSel = (curKind === 'zone' && curZone === z);
+      html += `<option value="zone:${esc(z)}"${isSel?' selected':''}>📊 ${esc(z)} (${camIds.length})</option>`;
+    }
+    html += `</optgroup>`;
+  }
+
+  html += `<optgroup label="🎥 ${t('focus.cameras')}">`;
+  for (const c of camCfgs) {
+    const isSel = (curKind === 'cam' && curId === c.camera_id);
+    const zoneTag = c.zone ? ` · ${esc(c.zone)}` : '';
+    html += `<option value="cam:${esc(c.camera_id)}"${isSel?' selected':''}>${esc(c.label || c.camera_id)}${zoneTag}</option>`;
+  }
+  html += `</optgroup>`;
+
+  sel.innerHTML = html;
 }
 
-function focusSelectCamera(id) {
-  selId = id || null;
+function focusSelectCamera(raw) {
+  // Reset diff cache so the next render rebuilds everything for the new target.
+  _focusLast.id = null;
+  _focusLast.kind = null;
+  if (!raw) {
+    _focusKind = 'cam'; _focusZone = ''; selId = null;
+  } else if (raw.startsWith('zone:')) {
+    _focusKind = 'zone'; _focusZone = raw.slice(5);
+    const camIds = _zoneCamIds(_focusZone);
+    selId = camIds[0] || null;   // primary cam (for per-cam edit/clear ops)
+  } else if (raw.startsWith('cam:')) {
+    _focusKind = 'cam'; _focusZone = '';
+    selId = raw.slice(4) || null;
+  }
   renderCamList();
   renderFocus();
 }
 
-function focusEditCam()    { if (selId) openEdit(selId); }
-function focusOneshot()    { if (selId) camOneshot(selId); }
-function focusClearAlert() { if (selId) clearCamAlert(selId); }
+function focusEditCam() {
+  // Edit only makes sense for individual cameras
+  if (_focusKind === 'cam' && selId) openEdit(selId);
+}
+function focusOneshot() {
+  if (_focusKind === 'zone') {
+    // Trigger every camera in the zone — the inference scheduler will pick
+    // the zone on its next tick once frames are available.
+    _zoneCamIds(_focusZone).forEach(id => camOneshot(id));
+  } else if (selId) {
+    camOneshot(selId);
+  }
+}
+function focusClearAlert() {
+  if (_focusKind === 'zone') {
+    _zoneCamIds(_focusZone).forEach(id => clearCamAlert(id));
+  } else if (selId) {
+    clearCamAlert(selId);
+  }
+}
 
 // Track last rendered string so we only mutate the DOM when content changes
-const _focusLast = { id: null, img: '', reply: '', err: '', alert: '', st: '', ms: '', ra: '', fa: '' };
+const _focusLast = { id: null, kind: null, gridKey: '', frames: {}, reply: '', err: '', alert: '', st: '', ms: '', ra: '', fa: '' };
 
-function renderFocus() {
-  const wrap     = document.getElementById('focusImgWrap');
-  const placeh   = document.getElementById('focusPlaceholder');
-  const replyEl  = document.getElementById('focusReply');
-  const errEl    = document.getElementById('focusErr');
-  const alertBar = document.getElementById('focusAlertBar');
-  const stPill   = document.getElementById('focusStatusPill');
-  const msPill   = document.getElementById('focusInferMs');
-  const raPill   = document.getElementById('focusReplyAgo');
-  const dotEl    = document.getElementById('focusDot');
-  const stLbl    = document.getElementById('focusStatusLbl');
-  const frameAge = document.getElementById('focusFrameAge');
-  const card     = document.getElementById('focusTextCard');
-  const btnEdit  = document.getElementById('focusEdit');
-  const btnOne   = document.getElementById('focusOneshot');
-  const btnClr   = document.getElementById('focusClearAlert');
+function _focusEls() {
+  return {
+    wrap:     document.getElementById('focusImgWrap'),
+    replyEl:  document.getElementById('focusReply'),
+    errEl:    document.getElementById('focusErr'),
+    alertBar: document.getElementById('focusAlertBar'),
+    stPill:   document.getElementById('focusStatusPill'),
+    msPill:   document.getElementById('focusInferMs'),
+    raPill:   document.getElementById('focusReplyAgo'),
+    dotEl:    document.getElementById('focusDot'),
+    stLbl:    document.getElementById('focusStatusLbl'),
+    frameAge: document.getElementById('focusFrameAge'),
+    card:     document.getElementById('focusTextCard'),
+    btnEdit:  document.getElementById('focusEdit'),
+    btnOne:   document.getElementById('focusOneshot'),
+    btnClr:   document.getElementById('focusClearAlert'),
+  };
+}
 
-  if (!selId) {
-    // Reset to empty state
-    if (_focusLast.id !== null) {
-      wrap.innerHTML = `<div class="focus-img-placeholder" id="focusPlaceholder">${t('focus.selectCam')}</div>`;
-      replyEl.textContent = t('focus.noReply');
-      replyEl.classList.add('empty');
-      errEl.style.display = 'none';
-      alertBar.style.display = 'none';
-      stPill.style.display = msPill.style.display = raPill.style.display = 'none';
-      btnEdit.style.display = btnOne.style.display = btnClr.style.display = 'none';
-      frameAge.textContent = '';
-      Object.assign(_focusLast, { id: null, img: '', reply: '', err: '', alert: '', st: '', ms: '', ra: '', fa: '' });
+function _focusResetEmpty(e) {
+  if (_focusLast.id === null && _focusLast.kind === null) return;
+  e.wrap.innerHTML = `<div class="focus-img-placeholder">${t('focus.selectCam')}</div>`;
+  e.replyEl.textContent = t('focus.noReply');
+  e.replyEl.classList.add('empty');
+  e.errEl.style.display = 'none';
+  e.alertBar.style.display = 'none';
+  e.stPill.style.display = e.msPill.style.display = e.raPill.style.display = 'none';
+  e.btnEdit.style.display = e.btnOne.style.display = e.btnClr.style.display = 'none';
+  e.frameAge.textContent = '';
+  Object.assign(_focusLast, { id: null, kind: null, gridKey: '', frames: {}, reply: '', err: '', alert: '', st: '', ms: '', ra: '', fa: '' });
+}
+
+function _gridSizeClass(n) {
+  if (n <= 1) return 'n-1';
+  if (n === 2) return 'n-2';
+  if (n <= 4) return 'n-4';
+  if (n <= 6) return 'n-6';
+  return 'n-many';
+}
+
+function _renderFocusZone(e) {
+  const zname = _focusZone;
+  const zdata = statusD.zones?.[zname] || {};
+  const camIds = _zoneCamIds(zname);
+  const kindChanged = (_focusLast.kind !== 'zone' || _focusLast.id !== zname);
+
+  // Per-zone derived values
+  const alertOn = !!zdata.alert_active
+                  || camIds.some(id => statusD.cameras?.[id]?.alert_active);
+  const replyTxt = zdata.last_reply || '';
+  const errTxt   = camIds.map(id => statusD.cameras?.[id]?.last_error)
+                         .filter(Boolean).join('\n');
+  const alertReason = zdata.alert_reason
+                  || camIds.map(id => statusD.cameras?.[id]?.alert_reason)
+                           .filter(Boolean).join(' / ');
+  const alertTxt = alertOn ? ('⚠ ' + (alertReason || 'Alert!')) : '';
+  const msTxt    = 'infer: ' + fms(zdata.last_infer_ms);
+  const raTxt    = 'reply: ' + ago(zdata.last_reply_ts);
+  const newestFrame = Math.max(0, ...camIds.map(id => statusD.cameras?.[id]?.last_frame_ts || 0));
+  const faTxt    = 'frame: ' + ago(newestFrame || null);
+  const stLabel  = `📊 ${zname} (${camIds.length})`;
+  const stClass  = alertOn ? 'alert' : 'active';
+
+  // ── Image grid (rebuild only when camera set changes) ─────────
+  const gridKey = 'zone:' + zname + '|' + camIds.join(',');
+  if (_focusLast.gridKey !== gridKey || kindChanged) {
+    const cls = _gridSizeClass(camIds.length);
+    let html = `<div class="focus-img-grid ${cls}">`;
+    for (const id of camIds) {
+      const cam = cfgOf(id);
+      const label = esc(cam?.label || id);
+      html += `<div class="focus-img-cell" data-cell="${esc(id)}">
+        <div class="focus-img-cell-empty">${t('grid.connecting')}</div>
+        <span class="focus-img-cell-status" data-cell-dot></span>
+        <span class="focus-img-cell-label">${label}</span>
+      </div>`;
     }
-    return;
+    html += `</div>`;
+    e.wrap.innerHTML = html;
+    _focusLast.gridKey = gridKey;
+    _focusLast.frames = {};
   }
 
+  // Incremental per-cell update
+  for (const id of camIds) {
+    const cell = e.wrap.querySelector(`[data-cell="${CSS.escape(id)}"]`);
+    if (!cell) continue;
+    const d  = statusD.cameras?.[id] || {};
+    const cam = cfgOf(id);
+    const st  = camStatus(id, d, cam);
+    const frameKey = d.last_frame_b64 ? d.last_frame_b64.slice(0, 32) : '';
+
+    if (_focusLast.frames[id] !== frameKey) {
+      let img = cell.querySelector('img');
+      if (d.last_frame_b64) {
+        if (img) {
+          img.src = 'data:image/jpeg;base64,' + d.last_frame_b64;
+        } else {
+          // Drop placeholder, insert image while preserving overlays.
+          const emp = cell.querySelector('.focus-img-cell-empty');
+          if (emp) emp.remove();
+          const newImg = document.createElement('img');
+          newImg.src = 'data:image/jpeg;base64,' + d.last_frame_b64;
+          newImg.alt = id;
+          cell.insertBefore(newImg, cell.firstChild);
+        }
+      }
+      _focusLast.frames[id] = frameKey;
+    }
+    // Status dot + alert outline
+    const dot = cell.querySelector('[data-cell-dot]');
+    if (dot) dot.className = 'focus-img-cell-status dot ' + st;
+    cell.classList.toggle('alert', !!d.alert_active);
+  }
+
+  // ── Toolbar / status / alert / text — same pattern as cam mode ──
+  e.stPill.style.display = e.msPill.style.display = e.raPill.style.display = '';
+  e.btnEdit.style.display = 'none';   // edit is per-camera only
+  e.btnOne.style.display  = '';
+
+  if (kindChanged || _focusLast.st !== stClass) {
+    e.dotEl.className = 'dot ' + stClass;
+    e.stLbl.textContent = stLabel;
+    e.stPill.className = 'pill' + (alertOn ? ' alert' : '');
+    _focusLast.st = stClass;
+  }
+  if (_focusLast.ms !== msTxt) { e.msPill.textContent = msTxt; _focusLast.ms = msTxt; }
+  if (_focusLast.ra !== raTxt) { e.raPill.textContent = raTxt; _focusLast.ra = raTxt; }
+  if (_focusLast.fa !== faTxt) { e.frameAge.textContent = faTxt; _focusLast.fa = faTxt; }
+
+  if (_focusLast.alert !== alertTxt) {
+    if (alertOn) {
+      e.alertBar.style.display = '';
+      e.alertBar.textContent = alertTxt;
+      e.card.classList.add('alert-on');
+      e.btnClr.style.display = '';
+    } else {
+      e.alertBar.style.display = 'none';
+      e.card.classList.remove('alert-on');
+      e.btnClr.style.display = 'none';
+    }
+    _focusLast.alert = alertTxt;
+  }
+  if (_focusLast.reply !== replyTxt) {
+    if (replyTxt) { e.replyEl.classList.remove('empty'); e.replyEl.textContent = replyTxt; }
+    else          { e.replyEl.classList.add('empty');    e.replyEl.textContent = t('focus.noReply'); }
+    _focusLast.reply = replyTxt;
+  }
+  if (_focusLast.err !== errTxt) {
+    if (errTxt) { e.errEl.style.display = ''; e.errEl.textContent = errTxt; }
+    else        { e.errEl.style.display = 'none'; }
+    _focusLast.err = errTxt;
+  }
+
+  _focusLast.kind = 'zone';
+  _focusLast.id   = zname;
+}
+
+function _renderFocusCam(e) {
   const d   = statusD.cameras?.[selId] || {};
   const cam = cfgOf(selId);
   const st  = camStatus(selId, d, cam);
@@ -1896,85 +2174,79 @@ function renderFocus() {
   const raTxt    = 'reply: ' + ago(d.last_reply_ts);
   const faTxt    = 'frame: ' + ago(d.last_frame_ts);
   const imgKey   = d.last_frame_b64 ? d.last_frame_b64.slice(0, 32) : '';
-  const idChanged = _focusLast.id !== selId;
+  const kindChanged = (_focusLast.kind !== 'cam' || _focusLast.id !== selId);
 
-  // ── Image ─────────────────────────────────────
-  if (idChanged || _focusLast.img !== imgKey) {
+  // ── Image (single, fills column) ──────────────
+  if (kindChanged || (_focusLast.frames[selId] !== imgKey)) {
     if (d.last_frame_b64) {
-      const existing = wrap.querySelector('img.focus-img');
-      if (existing) {
+      const existing = e.wrap.querySelector('img.focus-img');
+      if (existing && !kindChanged) {
         existing.src = 'data:image/jpeg;base64,' + d.last_frame_b64;
       } else {
-        wrap.innerHTML = `<img class="focus-img" src="data:image/jpeg;base64,${d.last_frame_b64}" alt="frame" />`;
+        e.wrap.innerHTML = `<img class="focus-img" src="data:image/jpeg;base64,${d.last_frame_b64}" alt="frame" />`;
       }
-    } else if (idChanged) {
+    } else if (kindChanged) {
       const hint = (st === 'stopped' ? t('grid.pressStart')
                   : st === 'disabled' ? t('grid.disabled')
                   : t('grid.connecting'));
-      wrap.innerHTML = `<div class="focus-img-placeholder">${esc(hint)}</div>`;
+      e.wrap.innerHTML = `<div class="focus-img-placeholder">${esc(hint)}</div>`;
     }
-    _focusLast.img = imgKey;
+    _focusLast.frames = { [selId]: imgKey };
+    _focusLast.gridKey = 'cam:' + selId;
   }
 
-  // ── Toolbar pills + buttons (only show once a camera is selected) ──
-  if (idChanged) {
-    stPill.style.display = '';
-    msPill.style.display = '';
-    raPill.style.display = '';
-    btnEdit.style.display = '';
-    btnOne.style.display  = '';
-  }
+  // Toolbar
+  e.stPill.style.display = e.msPill.style.display = e.raPill.style.display = '';
+  e.btnEdit.style.display = '';
+  e.btnOne.style.display  = '';
 
-  // Status pill
-  if (idChanged || _focusLast.st !== st) {
-    dotEl.className = 'dot ' + st;
-    stLbl.textContent = statusLbl(st) || st;
-    stPill.className = 'pill' + (alertOn ? ' alert' : '');
+  if (kindChanged || _focusLast.st !== st) {
+    e.dotEl.className = 'dot ' + st;
+    e.stLbl.textContent = statusLbl(st) || st;
+    e.stPill.className = 'pill' + (alertOn ? ' alert' : '');
     _focusLast.st = st;
   }
-  if (_focusLast.ms !== msTxt) { msPill.textContent = msTxt; _focusLast.ms = msTxt; }
-  if (_focusLast.ra !== raTxt) { raPill.textContent = raTxt; _focusLast.ra = raTxt; }
-  if (_focusLast.fa !== faTxt) { frameAge.textContent = faTxt; _focusLast.fa = faTxt; }
+  if (_focusLast.ms !== msTxt) { e.msPill.textContent = msTxt; _focusLast.ms = msTxt; }
+  if (_focusLast.ra !== raTxt) { e.raPill.textContent = raTxt; _focusLast.ra = raTxt; }
+  if (_focusLast.fa !== faTxt) { e.frameAge.textContent = faTxt; _focusLast.fa = faTxt; }
 
-  // ── Alert bar + Clear button ────────────────────
   if (_focusLast.alert !== alertTxt) {
     if (alertOn) {
-      alertBar.style.display = '';
-      alertBar.textContent = alertTxt;
-      card.classList.add('alert-on');
-      btnClr.style.display = '';
+      e.alertBar.style.display = '';
+      e.alertBar.textContent = alertTxt;
+      e.card.classList.add('alert-on');
+      e.btnClr.style.display = '';
     } else {
-      alertBar.style.display = 'none';
-      card.classList.remove('alert-on');
-      btnClr.style.display = 'none';
+      e.alertBar.style.display = 'none';
+      e.card.classList.remove('alert-on');
+      e.btnClr.style.display = 'none';
     }
     _focusLast.alert = alertTxt;
   }
-
-  // ── VLM reply text ──────────────────────────────
   if (_focusLast.reply !== replyTxt) {
-    if (replyTxt) {
-      replyEl.classList.remove('empty');
-      replyEl.textContent = replyTxt;
-    } else {
-      replyEl.classList.add('empty');
-      replyEl.textContent = t('focus.noReply');
-    }
+    if (replyTxt) { e.replyEl.classList.remove('empty'); e.replyEl.textContent = replyTxt; }
+    else          { e.replyEl.classList.add('empty');    e.replyEl.textContent = t('focus.noReply'); }
     _focusLast.reply = replyTxt;
   }
-
-  // ── Error footer ───────────────────────────────
   if (_focusLast.err !== errTxt) {
-    if (errTxt) {
-      errEl.style.display = '';
-      errEl.textContent = errTxt;
-    } else {
-      errEl.style.display = 'none';
-    }
+    if (errTxt) { e.errEl.style.display = ''; e.errEl.textContent = errTxt; }
+    else        { e.errEl.style.display = 'none'; }
     _focusLast.err = errTxt;
   }
 
-  if (idChanged) _focusLast.id = selId;
+  _focusLast.kind = 'cam';
+  _focusLast.id   = selId;
+}
+
+function renderFocus() {
+  const e = _focusEls();
+  if (_focusKind === 'zone' && _focusZone) {
+    _renderFocusZone(e);
+  } else if (_focusKind === 'cam' && selId) {
+    _renderFocusCam(e);
+  } else {
+    _focusResetEmpty(e);
+  }
 }
 
 // ╔══════════════════════════════════════════════════════════╗
@@ -2392,7 +2664,10 @@ async function loadCams() {
       camCfgs = data.cameras || [];
       document.getElementById('pillCams').innerText = t('header.camCount', {n: camCfgs.length});
       renderCamList(); renderGrid();
-      if (curView === 'focus') refreshFocusCamSelect();
+      if (curView === 'focus') {
+        _lastFocusZoneKey = _zonesFromCfg().join(',');
+        refreshFocusCamSelect();
+      }
       return;
     } catch(e) {
       console.warn('cameras attempt', attempt + 1, ':', e);
@@ -2472,7 +2747,16 @@ async function poll() {
     renderCamList();
     if      (curView === 'grid')    renderGrid();
     else if (curView === 'detail')  renderDetail();
-    else if (curView === 'focus')   renderFocus();
+    else if (curView === 'focus') {
+      // Refresh the dropdown if the set of zones changed (e.g. a camera
+      // just became the first in a new zone).
+      const zkey = _zonesFromCfg().join(',');
+      if (zkey !== _lastFocusZoneKey) {
+        _lastFocusZoneKey = zkey;
+        refreshFocusCamSelect();
+      }
+      renderFocus();
+    }
 
   } catch(e) {
     console.warn('poll:', e);
