@@ -483,6 +483,12 @@ class GlobalConfig(BaseModel):
     alarm_speech_interval: float = Field(default=10.0, description="Seconds between speech repetitions.")
     alarm_blink_interval: float = Field(default=0.5, description="Light blink interval in seconds.")
     alarm_volume: float = Field(default=1.0, description="Speech volume 0.0-1.0.")
+    # Embedded MQTT broker — devices subscribe to /Sos and receive color:X commands
+    mqtt_broker_enabled: bool = Field(default=False, description="Enable embedded MQTT broker for signal lights.")
+    mqtt_broker_port: int = Field(default=1883, ge=1, le=65535, description="MQTT broker listen port.")
+    mqtt_topic: str = Field(default="/Sos", description="Topic to publish color commands to.")
+    mqtt_alert_color: str = Field(default="r", description="Color sent on alert (e.g. 'r', 'rgb').")
+    mqtt_clear_color: str = Field(default="", description="Color sent on clear ('' = all off, 'g' = green).")
 
 
 # ──────────────────────────────────────────────────────────────
@@ -657,16 +663,226 @@ def _notify_signal_light(alert_on: bool) -> None:
 
 
 def _update_signal_light() -> None:
-    """Check if global alert state changed; if so fire the light API asynchronously."""
+    """Check if global alert state changed; if so fire the light API + MQTT."""
     global _prev_global_alert
     with _alert_light_lock:
         with st.global_lock:
             new_alert = any(s.alert_active for s in st.cameras.values())
         if new_alert != _prev_global_alert:
             _prev_global_alert = new_alert
+            # External HTTP alarm server
             threading.Thread(
                 target=_notify_signal_light, args=(new_alert,), daemon=True
             ).start()
+            # Embedded MQTT broker — broadcast to subscribed signal lights
+            mqtt_notify_alert(new_alert)
+
+
+# ──────────────────────────────────────────────────────────────
+# Embedded MQTT Broker (amqtt)
+# ──────────────────────────────────────────────────────────────
+# Hosts an MQTT 3.1.1 broker on cfg.mqtt_broker_port so signal-light
+# devices can connect and subscribe to cfg.mqtt_topic (default /Sos).
+# Publishes "color:r" / "color:" on VLM alert change. Also subscribes
+# to the topic itself so we keep a recent-message log + observe device
+# status reports.
+
+import asyncio   # noqa: E402
+
+_mqtt_broker = None             # amqtt.broker.Broker instance
+_mqtt_pub_client = None         # amqtt.client.MQTTClient (publisher + subscriber)
+_mqtt_loop = None               # asyncio loop running in dedicated thread
+_mqtt_thread: Optional[threading.Thread] = None
+_mqtt_lock = threading.Lock()
+_mqtt_last_state = "?"          # last LED state we asked for ("r","g","b","rgb","")
+_mqtt_recent: "deque" = deque(maxlen=50)   # ring of {ts, topic, payload}
+_mqtt_started = False
+_MQTT_INTERNAL_CLIENT_ID = "vlm-app-internal"
+
+
+def _mqtt_record_message(topic: str, payload: bytes) -> None:
+    """Append a received message to the ring buffer (thread-safe)."""
+    try:
+        text = payload.decode("utf-8", errors="replace")
+    except Exception:
+        text = repr(payload)
+    rec = {"ts": time.time(), "topic": topic, "payload": text}
+    with _mqtt_lock:
+        _mqtt_recent.append(rec)
+
+
+try:
+    import amqtt  # noqa: F401
+    _MQTT_AVAILABLE = True
+except Exception:
+    _MQTT_AVAILABLE = False
+    print("[MQTT] amqtt not installed — broker disabled. `pip install amqtt` to enable.")
+
+
+async def _mqtt_consume_forever() -> None:
+    """Consumes messages from our internal subscriber so they are logged."""
+    from amqtt.mqtt.constants import QOS_0  # noqa: PLC0415
+    while True:
+        try:
+            msg = await _mqtt_pub_client.deliver_message()
+            pkt = msg.publish_packet
+            topic = pkt.variable_header.topic_name
+            payload = bytes(pkt.payload.data) if pkt.payload and pkt.payload.data else b""
+            _mqtt_record_message(topic, payload)
+        except asyncio.CancelledError:
+            raise
+        except Exception as e:
+            print(f"[MQTT] consume error: {e}")
+            await asyncio.sleep(0.5)
+
+
+async def _mqtt_main(port: int, topic: str) -> None:
+    """Start broker + internal pub/sub client. Runs forever inside its own loop."""
+    global _mqtt_broker, _mqtt_pub_client
+    from amqtt.broker import Broker  # noqa: PLC0415
+    from amqtt.client import MQTTClient  # noqa: PLC0415
+    from amqtt.mqtt.constants import QOS_0  # noqa: PLC0415
+
+    config = {
+        "listeners": {
+            "default": {
+                "type": "tcp",
+                "bind": f"0.0.0.0:{port}",
+                "max_connections": 200,
+            },
+        },
+        "sys_interval": 0,
+        "auth": {"allow-anonymous": True, "plugins": []},
+        "topic-check": {"enabled": False},
+    }
+    _mqtt_broker = Broker(config)
+    await _mqtt_broker.start()
+    print(f"[MQTT-BROKER] listening on 0.0.0.0:{port}")
+
+    # Internal client — used both to publish color commands AND to keep
+    # a recent-messages log of what is happening on the topic.
+    _mqtt_pub_client = MQTTClient(client_id=_MQTT_INTERNAL_CLIENT_ID)
+    await _mqtt_pub_client.connect(f"mqtt://127.0.0.1:{port}/")
+    # Subscribe to topic + sub-topics so device status reports are visible too
+    norm_topic = topic if topic.startswith("/") else "/" + topic
+    await _mqtt_pub_client.subscribe([
+        (norm_topic, QOS_0),
+        (norm_topic.rstrip("/") + "/#", QOS_0),
+    ])
+    print(f"[MQTT] internal client subscribed to {norm_topic} (+ /#)")
+
+    # Consume incoming messages in the background
+    asyncio.create_task(_mqtt_consume_forever())
+
+    # Idle — keep the loop alive
+    while True:
+        await asyncio.sleep(3600)
+
+
+def _mqtt_thread_target(port: int, topic: str) -> None:
+    """Run the asyncio loop dedicated to MQTT in a daemon thread."""
+    global _mqtt_loop
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    _mqtt_loop = loop
+    try:
+        loop.run_until_complete(_mqtt_main(port, topic))
+    except Exception as e:
+        print(f"[MQTT-BROKER] crashed: {e}")
+    finally:
+        _mqtt_loop = None
+
+
+def mqtt_start_broker() -> bool:
+    """Start the embedded MQTT broker (idempotent). Returns True if running."""
+    global _mqtt_thread, _mqtt_started
+    if _mqtt_started:
+        return True
+    if not cfg.mqtt_broker_enabled:
+        return False
+    if not _MQTT_AVAILABLE:
+        print("[MQTT-BROKER] cannot start — amqtt not installed")
+        return False
+    try:
+        _mqtt_thread = threading.Thread(
+            target=_mqtt_thread_target,
+            args=(int(cfg.mqtt_broker_port), cfg.mqtt_topic or "/Sos"),
+            daemon=True, name="mqtt-broker",
+        )
+        _mqtt_thread.start()
+        _mqtt_started = True
+        return True
+    except Exception as e:
+        print(f"[MQTT-BROKER] failed to start: {e}")
+        return False
+
+
+def mqtt_publish_color(color: str) -> bool:
+    """Publish 'color:<X>' to the configured topic. Safe to call from any thread.
+
+    color: "" (off), "r", "g", "b", or any combination like "rgb".
+    Returns True if the publish was queued.
+    """
+    global _mqtt_last_state
+    if _mqtt_loop is None or _mqtt_pub_client is None:
+        return False
+    topic = cfg.mqtt_topic or "/Sos"
+    payload = f"color:{color}".encode("utf-8")
+    try:
+        from amqtt.mqtt.constants import QOS_0  # noqa: PLC0415
+        fut = asyncio.run_coroutine_threadsafe(
+            _mqtt_pub_client.publish(topic, payload, qos=QOS_0),
+            _mqtt_loop,
+        )
+        _mqtt_last_state = color
+        # Also log locally so the message ring shows the outgoing command
+        # immediately, not only after the round-trip through our subscriber.
+        _mqtt_record_message(topic, payload)
+        print(f"[MQTT] → {topic}  color:{color or '(off)'}")
+        return True
+    except Exception as e:
+        print(f"[MQTT] publish error: {e}")
+        return False
+
+
+def mqtt_notify_alert(alert_on: bool) -> None:
+    """Translate alert state to a color command and publish (fire-and-forget)."""
+    if not cfg.mqtt_broker_enabled:
+        return
+    color = cfg.mqtt_alert_color if alert_on else cfg.mqtt_clear_color
+    if color is None:
+        color = ""
+    # Always run in a worker thread so the caller (often an inference loop)
+    # is never blocked by the asyncio round-trip.
+    threading.Thread(target=mqtt_publish_color, args=(color,), daemon=True).start()
+
+
+def mqtt_broker_status() -> dict:
+    """Snapshot of broker state for the UI."""
+    running = (_mqtt_loop is not None and _mqtt_pub_client is not None)
+    clients = 0
+    sessions: list[str] = []
+    if _mqtt_broker is not None:
+        try:
+            # amqtt stores active sessions in _sessions dict
+            raw = list(getattr(_mqtt_broker, "_sessions", {}).keys())
+            sessions = [s for s in raw if s != _MQTT_INTERNAL_CLIENT_ID]
+            clients = len(sessions)
+        except Exception:
+            pass
+    with _mqtt_lock:
+        recent = list(_mqtt_recent)[-20:]
+    return {
+        "enabled": bool(cfg.mqtt_broker_enabled),
+        "running": running,
+        "available": _MQTT_AVAILABLE,
+        "port": cfg.mqtt_broker_port,
+        "topic": cfg.mqtt_topic or "/Sos",
+        "client_count": clients,
+        "clients": sessions,
+        "last_color": _mqtt_last_state,
+        "recent_messages": recent,
+    }
 
 
 # ──────────────────────────────────────────────────────────────
@@ -1964,6 +2180,39 @@ def get_version():
     return JSONResponse({"version": APP_VERSION_STAMP}, headers=_NOCACHE_HEADERS)
 
 
+@app.on_event("startup")
+def _on_app_startup():
+    """Start optional background services (MQTT broker) after the loop is up."""
+    if cfg.mqtt_broker_enabled:
+        mqtt_start_broker()
+
+
+# ─── MQTT broker control / status ────────────────────────────
+
+@app.get("/mqtt/status")
+def mqtt_status():
+    """Return broker status, registered devices, recent message log."""
+    return JSONResponse(mqtt_broker_status())
+
+
+@app.post("/mqtt/test")
+async def mqtt_test(request: Request):
+    """Publish an arbitrary color command for testing. Body: {color: "r|g|b|rgb|"}."""
+    body = await request.json()
+    color = str(body.get("color", "")).strip()
+    if color and not all(ch in "rgb" for ch in color):
+        return JSONResponse({"ok": False, "error": "color must be empty or a subset of 'rgb'"}, status_code=400)
+    if not cfg.mqtt_broker_enabled:
+        return JSONResponse({"ok": False, "error": "MQTT broker not enabled in config"}, status_code=400)
+    if not _mqtt_started:
+        # Try late start so the user can enable then test without restart
+        mqtt_start_broker()
+        time.sleep(0.5)
+    ok = mqtt_publish_color(color)
+    return JSONResponse({"ok": ok, "color": color or "(off)",
+                         "topic": cfg.mqtt_topic or "/Sos"})
+
+
 # ─── Global config ───────────────────────────────────────────
 
 @app.post("/config")
@@ -1988,6 +2237,10 @@ def set_config(new_cfg: GlobalConfig):
                 cam_state.alert_reason = ""
                 cam_state.alert_ts = None
     _save_config()
+    # Late-start the MQTT broker if user just enabled it.
+    # Note: port changes after start require an app restart (single-bind socket).
+    if cfg.mqtt_broker_enabled and not _mqtt_started:
+        mqtt_start_broker()
     return JSONResponse({"ok": True, "config": cfg.model_dump()})
 
 

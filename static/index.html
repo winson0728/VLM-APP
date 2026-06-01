@@ -900,6 +900,63 @@
           </div>
           <div class="hint" id="alertLightMsg" style="margin-top:4px"></div>
         </details>
+
+        <!-- MQTT Broker for signal lights -->
+        <details style="margin-top:8px" id="mqttSection">
+          <summary data-i18n="panel.mqtt">📡 MQTT 警示燈伺服器</summary>
+          <div class="toggle" style="margin-top:6px">
+            <label class="switch"><input type="checkbox" id="mqttEnabled"/><span class="slider"></span></label>
+            <span class="hint" data-i18n="hint.mqtt">啟用內建 MQTT Broker，告警時自動發送色碼</span>
+          </div>
+          <div class="row2" style="margin-top:6px">
+            <div>
+              <label data-i18n="form.mqttPort">Port</label>
+              <input id="mqttPort" type="number" min="1" max="65535" value="1883" style="font-size:11px"/>
+            </div>
+            <div>
+              <label data-i18n="form.mqttTopic">Topic</label>
+              <input id="mqttTopic" value="/Sos" style="font-size:11px"/>
+            </div>
+          </div>
+          <div class="row2" style="margin-top:6px">
+            <div>
+              <label data-i18n="form.mqttAlertColor">告警色 (alert)</label>
+              <select id="mqttAlertColor" style="font-size:11px">
+                <option value="r">r — 紅</option>
+                <option value="g">g — 綠</option>
+                <option value="b">b — 藍</option>
+                <option value="rgb">rgb — 全亮</option>
+              </select>
+            </div>
+            <div>
+              <label data-i18n="form.mqttClearColor">清除色 (clear)</label>
+              <select id="mqttClearColor" style="font-size:11px">
+                <option value="">(關閉)</option>
+                <option value="g">g — 綠</option>
+                <option value="b">b — 藍</option>
+              </select>
+            </div>
+          </div>
+          <div class="hint" style="margin-top:6px" data-i18n="hint.mqttPort">變更 Port 需要重新啟動服務</div>
+
+          <div class="btnrow" style="margin-top:8px;gap:4px;flex-wrap:wrap">
+            <button class="btn btn-danger btn-sm"    onclick="mqttTest('r')">🔴 r</button>
+            <button class="btn btn-secondary btn-sm" onclick="mqttTest('g')" style="background:#16a34a;color:#fff;border-color:#16a34a">🟢 g</button>
+            <button class="btn btn-secondary btn-sm" onclick="mqttTest('b')" style="background:#2563eb;color:#fff;border-color:#2563eb">🔵 b</button>
+            <button class="btn btn-secondary btn-sm" onclick="mqttTest('rgb')">⚪ rgb</button>
+            <button class="btn btn-secondary btn-sm" onclick="mqttTest('')" data-i18n="btn.mqttOff">⏹ 關閉</button>
+          </div>
+
+          <div style="margin-top:8px;padding:8px;background:#f8fafc;border-radius:8px;font-size:11px" id="mqttStatusBox">
+            <div><b data-i18n="form.mqttBrokerStatus">狀態</b>: <span id="mqttRunLbl">—</span></div>
+            <div><b data-i18n="form.mqttClients">已連線裝置</b>: <span id="mqttClientLbl">—</span></div>
+            <div><b data-i18n="form.mqttLastColor">最近發送色碼</b>: <span id="mqttLastColor">—</span></div>
+            <div style="margin-top:4px"><b data-i18n="form.mqttRecent">最近訊息</b></div>
+            <div id="mqttRecent" style="font-family:monospace;font-size:10px;max-height:90px;overflow-y:auto;background:#fff;border:1px solid #e5e7eb;border-radius:6px;padding:4px;margin-top:2px"></div>
+          </div>
+          <div class="hint" id="mqttTestMsg" style="margin-top:4px"></div>
+        </details>
+
         <div class="btnrow">
           <button class="btn btn-primary btn-sm" onclick="applyGlobalConfig()" data-i18n="btn.apply">套用設定</button>
         </div>
@@ -1158,6 +1215,17 @@ const I18N = {
   'panel.ollamaModelVer':'Ollama / Model / 版本','panel.yolo':'YOLO 預篩選設定',
   'panel.video':'影片錄製設定','panel.globalPrompt':'全域 VLM Prompt',
   'panel.alertLight':'🚨 警示燈設定','panel.sysOps':'系統操作','panel.camList':'攝影機清單',
+  'panel.mqtt':'📡 MQTT 警示燈伺服器',
+  'hint.mqtt':'啟用內建 MQTT Broker，告警時自動發送色碼',
+  'hint.mqttPort':'變更 Port 需要重新啟動服務',
+  'form.mqttPort':'Port','form.mqttTopic':'Topic',
+  'form.mqttAlertColor':'告警色 (alert)','form.mqttClearColor':'清除色 (clear)',
+  'form.mqttBrokerStatus':'狀態','form.mqttClients':'已連線裝置',
+  'form.mqttLastColor':'最近發送色碼','form.mqttRecent':'最近訊息',
+  'btn.mqttOff':'⏹ 關閉',
+  'mqtt.disabled':'未啟用','mqtt.running':'運行中','mqtt.starting':'啟動中',
+  'mqtt.notInstalled':'amqtt 套件未安裝 (pip install amqtt)',
+  'mqtt.noMsg':'尚無訊息','msg.sending':'送出中…',
   'form.ollamaUrl':'Ollama API URL','form.model':'Model','form.version':'Version',
   'form.v10':'V1.0 Basic','form.v11':'V1.1 Alerts','form.autoSnap':'Auto Snapshot',
   'form.snapKeyword':'Snapshot keyword','form.alertKw':'Alert keywords (V1.1, 逗號分隔)',
@@ -1222,6 +1290,17 @@ const I18N = {
   'panel.ollamaModelVer':'Ollama / Model / Version','panel.yolo':'YOLO Pre-filter',
   'panel.video':'Video Recording','panel.globalPrompt':'Global VLM Prompt',
   'panel.alertLight':'🚨 Signal Light','panel.sysOps':'System Operations','panel.camList':'Camera List',
+  'panel.mqtt':'📡 MQTT Signal-Light Broker',
+  'hint.mqtt':'Embedded MQTT broker; publishes color code on alert',
+  'hint.mqttPort':'Port changes require a service restart',
+  'form.mqttPort':'Port','form.mqttTopic':'Topic',
+  'form.mqttAlertColor':'Alert color','form.mqttClearColor':'Clear color',
+  'form.mqttBrokerStatus':'Status','form.mqttClients':'Connected devices',
+  'form.mqttLastColor':'Last color sent','form.mqttRecent':'Recent messages',
+  'btn.mqttOff':'⏹ Off',
+  'mqtt.disabled':'disabled','mqtt.running':'running','mqtt.starting':'starting',
+  'mqtt.notInstalled':'amqtt package not installed (pip install amqtt)',
+  'mqtt.noMsg':'no messages','msg.sending':'sending…',
   'form.ollamaUrl':'Ollama API URL','form.model':'Model','form.version':'Version',
   'form.v10':'V1.0 Basic','form.v11':'V1.1 Alerts','form.autoSnap':'Auto Snapshot',
   'form.snapKeyword':'Snapshot keyword','form.alertKw':'Alert keywords (V1.1, comma-separated)',
@@ -1286,6 +1365,17 @@ const I18N = {
   'panel.ollamaModelVer':'Ollama / Model / バージョン','panel.yolo':'YOLO プレフィルタ',
   'panel.video':'録画設定','panel.globalPrompt':'グローバル VLM プロンプト',
   'panel.alertLight':'🚨 警告灯設定','panel.sysOps':'システム操作','panel.camList':'カメラ一覧',
+  'panel.mqtt':'📡 MQTT 警告灯ブローカー',
+  'hint.mqtt':'組込み MQTT Broker を起動し、アラート時に色コードを送信',
+  'hint.mqttPort':'Port 変更にはサービスの再起動が必要',
+  'form.mqttPort':'Port','form.mqttTopic':'Topic',
+  'form.mqttAlertColor':'アラート色','form.mqttClearColor':'クリア色',
+  'form.mqttBrokerStatus':'状態','form.mqttClients':'接続デバイス',
+  'form.mqttLastColor':'最後に送信した色','form.mqttRecent':'最近のメッセージ',
+  'btn.mqttOff':'⏹ オフ',
+  'mqtt.disabled':'無効','mqtt.running':'稼働中','mqtt.starting':'起動中',
+  'mqtt.notInstalled':'amqtt 未インストール (pip install amqtt)',
+  'mqtt.noMsg':'メッセージなし','msg.sending':'送信中…',
   'form.ollamaUrl':'Ollama API URL','form.model':'Model','form.version':'バージョン',
   'form.v10':'V1.0 基本','form.v11':'V1.1 アラート','form.autoSnap':'自動スナップショット',
   'form.snapKeyword':'スナップショットキーワード','form.alertKw':'アラートキーワード（V1.1, カンマ区切り）',
@@ -2447,6 +2537,12 @@ function loadCfgIntoForm(config) {
   document.getElementById('alarmSpeechInterval').value  = config.alarm_speech_interval ?? 10;
   document.getElementById('alarmBlinkInterval').value   = config.alarm_blink_interval ?? 0.5;
   document.getElementById('alarmVolume').value          = config.alarm_volume ?? 1.0;
+  // MQTT broker
+  document.getElementById('mqttEnabled').checked     = !!config.mqtt_broker_enabled;
+  document.getElementById('mqttPort').value          = config.mqtt_broker_port ?? 1883;
+  document.getElementById('mqttTopic').value         = config.mqtt_topic || '/Sos';
+  document.getElementById('mqttAlertColor').value    = config.mqtt_alert_color || 'r';
+  document.getElementById('mqttClearColor').value    = config.mqtt_clear_color ?? '';
   selectScenario(config.scenario || 'general_safety');
 }
 
@@ -2479,6 +2575,11 @@ async function applyGlobalConfig(silent = false) {
       alarm_speech_interval: parseFloat(document.getElementById('alarmSpeechInterval').value) || 10,
       alarm_blink_interval:  parseFloat(document.getElementById('alarmBlinkInterval').value) || 0.5,
       alarm_volume:          parseFloat(document.getElementById('alarmVolume').value) || 1.0,
+      mqtt_broker_enabled:   document.getElementById('mqttEnabled').checked,
+      mqtt_broker_port:      parseInt(document.getElementById('mqttPort').value) || 1883,
+      mqtt_topic:            document.getElementById('mqttTopic').value.trim() || '/Sos',
+      mqtt_alert_color:      document.getElementById('mqttAlertColor').value,
+      mqtt_clear_color:      document.getElementById('mqttClearColor').value,
     });
     // Keep _cfgPrompt in sync so switching to custom shows correct value
     if (_activeScenario === 'custom') {
@@ -2527,6 +2628,78 @@ async function testAlertLight(alertOn) {
   }
   setTimeout(() => msgEl.innerText = '', 8000);
 }
+
+// ╔══════════════════════════════════════════════════════════╗
+// ║  MQTT broker — test publish + status polling              ║
+// ╚══════════════════════════════════════════════════════════╝
+async function mqttTest(color) {
+  const msgEl = document.getElementById('mqttTestMsg');
+  msgEl.style.color = '#888';
+  msgEl.innerText = '⏳ ' + t('msg.sending');
+  try {
+    const resp = await fetch('/mqtt/test', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ color }),
+    });
+    const data = await resp.json().catch(() => ({}));
+    if (data.ok) {
+      msgEl.style.color = '#16a34a';
+      msgEl.innerText = `📡 ${data.topic} ← color:${color || '(off)'}`;
+    } else {
+      msgEl.style.color = '#dc3545';
+      msgEl.innerText = '✗ ' + (data.error || ('HTTP ' + resp.status));
+    }
+  } catch(e) {
+    msgEl.style.color = '#dc3545';
+    msgEl.innerText = '✗ ' + e.message;
+  }
+  refreshMqttStatus();
+  setTimeout(() => msgEl.innerText = '', 5000);
+}
+
+async function refreshMqttStatus() {
+  try {
+    const r = await fetch('/mqtt/status', { cache: 'no-store' });
+    if (!r.ok) return;
+    const s = await r.json();
+    const run = document.getElementById('mqttRunLbl');
+    if (run) {
+      if (s.available === false) {
+        run.textContent = '⚠ ' + t('mqtt.notInstalled');
+        run.style.color = '#dc3545';
+      } else if (!s.enabled) {
+        run.textContent = '⚪ ' + t('mqtt.disabled');
+        run.style.color = '#6b7280';
+      } else if (s.running) {
+        run.textContent = '🟢 ' + t('mqtt.running') + ' (' + s.port + ')';
+        run.style.color = '#16a34a';
+      } else {
+        run.textContent = '🟡 ' + t('mqtt.starting');
+        run.style.color = '#d97706';
+      }
+    }
+    const cn = document.getElementById('mqttClientLbl');
+    if (cn) {
+      cn.textContent = s.client_count + (s.clients?.length ? '  [' + s.clients.join(', ') + ']' : '');
+    }
+    const lc = document.getElementById('mqttLastColor');
+    if (lc) lc.textContent = s.last_color === '?' ? '—' : (s.last_color || '(off)');
+    const rec = document.getElementById('mqttRecent');
+    if (rec) {
+      if (!s.recent_messages?.length) {
+        rec.innerHTML = '<span style="color:#9ca3af">— ' + t('mqtt.noMsg') + ' —</span>';
+      } else {
+        rec.innerHTML = s.recent_messages.slice().reverse().map(m => {
+          const dt = new Date(m.ts * 1000);
+          const ts = dt.toLocaleTimeString();
+          return `<div>[${ts}] ${esc(m.topic)} ← ${esc(m.payload)}</div>`;
+        }).join('');
+      }
+    }
+  } catch(e) { /* ignore */ }
+}
+
 async function camOneshot(id) { try { await POST(`/cameras/${id}/oneshot`, {}); } catch(e) { alert(e.message); } }
 async function clearCamAlert(id) {
   try { await POST(`/cameras/${id}/alert/clear`, {}); renderDetail(); } catch(e) { alert(e.message); }
@@ -2803,6 +2976,15 @@ async function checkServerVersion() {
   await poll();
   setInterval(poll, POLL_MS);
   setInterval(checkServerVersion, 30000);   // recheck every 30s
+  // Poll MQTT broker status while the MQTT panel is open
+  setInterval(() => {
+    const sec = document.getElementById('mqttSection');
+    if (sec && sec.open) refreshMqttStatus();
+  }, 3000);
+  // Initial refresh when the panel is opened
+  document.getElementById('mqttSection')?.addEventListener('toggle', (ev) => {
+    if (ev.target.open) refreshMqttStatus();
+  });
   // Catch bfcache restores — Chrome may resurrect this tab from memory.
   window.addEventListener('pageshow', (e) => {
     if (e.persisted) checkServerVersion();
