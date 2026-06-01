@@ -754,7 +754,7 @@ async def _mqtt_main(port: int, topic: str) -> None:
     """
     global _mqtt_broker, _mqtt_pub_client, _mqtt_error, _mqtt_phase
     from amqtt.broker import Broker  # noqa: PLC0415
-    from amqtt.client import MQTTClient, ConnectException  # noqa: PLC0415
+    from amqtt.client import MQTTClient  # noqa: PLC0415
     from amqtt.mqtt.constants import QOS_0  # noqa: PLC0415
 
     # ── Phase 1: bind broker ─────────────────────────────────
@@ -788,6 +788,8 @@ async def _mqtt_main(port: int, topic: str) -> None:
         return
 
     # ── Phase 2: internal client connects to own broker ──────
+    # amqtt may raise its own ConnectException, a plain OSError, or any
+    # subclass.  Catch broadly — we want to retry on all transient errors.
     _mqtt_phase = "client_connect"
     last_err: Optional[str] = None
     for attempt in range(10):
@@ -797,7 +799,7 @@ async def _mqtt_main(port: int, topic: str) -> None:
             _mqtt_pub_client = client
             last_err = None
             break
-        except (ConnectException, OSError, Exception) as e:
+        except Exception as e:
             last_err = f"{type(e).__name__}: {e}"
             await asyncio.sleep(0.3 * (attempt + 1))
     if _mqtt_pub_client is None:
