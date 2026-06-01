@@ -272,10 +272,173 @@
       box-shadow: 0 0 0 2px rgba(239,68,68,0.18);
     }
 
+    /* ── Focus Mode (聚焦模式) ──────────────────────
+       Image fills left column to its natural aspect ratio (no cropping).
+       Inference text fills right column with internal scrolling only.
+       The whole layout fits inside the viewport — no page scroll needed. */
+    #viewFocus {
+      padding: 10px 12px;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      min-height: 0;
+    }
+    .focus-toolbar {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 8px;
+      flex-wrap: wrap;
+      flex-shrink: 0;
+    }
+    .focus-toolbar select {
+      width: auto;
+      max-width: 260px;
+      padding: 4px 10px;
+      font-size: 13px;
+      font-weight: 600;
+      margin-top: 0;
+    }
+    .focus-toolbar .pill { font-size: 11px; }
+    .focus-alert {
+      background: rgba(239,68,68,0.12);
+      border: 1px solid rgba(239,68,68,0.6);
+      color: #b91c1c;
+      padding: 7px 12px;
+      border-radius: 8px;
+      margin-bottom: 8px;
+      font-size: 13px;
+      font-weight: 600;
+      flex-shrink: 0;
+    }
+    body.dark .focus-alert { color: #fca5a5; background: rgba(239,68,68,0.18); }
+    .focus-layout {
+      display: grid;
+      grid-template-columns: minmax(0, 1.7fr) minmax(320px, 1fr);
+      gap: 10px;
+      flex: 1;
+      min-height: 0;
+    }
+    .focus-img-wrap {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: #0d1117;
+      border-radius: 12px;
+      overflow: hidden;
+      min-height: 0;
+    }
+    .focus-img {
+      max-width: 100%;
+      max-height: 100%;
+      object-fit: contain;
+      display: block;
+      transition: opacity 0.25s ease;
+    }
+    .focus-img-placeholder {
+      color: #6b7280;
+      font-size: 13px;
+      text-align: center;
+      padding: 24px;
+    }
+    .focus-text-card {
+      display: flex;
+      flex-direction: column;
+      min-height: 0;
+      padding: 12px 14px;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+    }
+    .focus-text-card.alert-on {
+      border-color: var(--alert);
+      box-shadow: 0 0 0 2px rgba(239,68,68,0.18);
+    }
+    .focus-text-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 6px;
+      flex-shrink: 0;
+    }
+    .focus-text-header .label {
+      font-size: 11px;
+      font-weight: 800;
+      letter-spacing: 0.07em;
+      color: var(--text2);
+      text-transform: uppercase;
+    }
+    .focus-reply {
+      flex: 1;
+      overflow-y: auto;
+      white-space: pre-wrap;
+      word-break: break-word;
+      font-size: 15px;
+      line-height: 1.7;
+      margin: 0;
+      padding-right: 4px;
+    }
+    .focus-reply.empty {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--text2);
+      font-size: 13px;
+      font-style: italic;
+    }
+    .focus-err {
+      margin-top: 8px;
+      padding: 6px 10px;
+      background: rgba(245, 158, 11, 0.1);
+      border-radius: 7px;
+      font-size: 11px;
+      color: var(--orange);
+      flex-shrink: 0;
+    }
+    @media (max-width: 900px) {
+      .focus-layout {
+        grid-template-columns: 1fr;
+        grid-template-rows: minmax(220px, 50vh) minmax(160px, 40vh);
+      }
+    }
+
     /* ── Detail View ──────────────────────────────── */
-    .detail-grid { display: grid; grid-template-columns: 1fr 340px; gap: 12px; }
+    .detail-grid {
+      display: grid;
+      grid-template-columns: 1fr 400px;
+      gap: 12px;
+      height: 100%;
+      align-items: start;
+    }
+    .detail-col-img {
+      position: sticky;
+      top: 0;
+    }
+    .detail-col-info {
+      max-height: calc(100vh - 120px);
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
     .detail-frame-wrap { border-radius: 12px; overflow: hidden; background: #0d1117; }
-    .detail-frame { width: 100%; display: block; object-fit: contain; transition: opacity 0.3s ease; }
+    .detail-frame {
+      width: 100%;
+      display: block;
+      object-fit: contain;
+      max-height: calc(100vh - 130px);
+      transition: opacity 0.3s ease;
+    }
+    .detail-reply-card { padding: 12px; }
+    .detail-reply-pre {
+      white-space: pre-wrap;
+      word-break: break-word;
+      font-size: 13px;
+      line-height: 1.6;
+      margin: 0;
+      max-height: 38vh;
+      overflow-y: auto;
+    }
 
     /* ── Snapshots ────────────────────────────────── */
     .snap-layout { display: grid; grid-template-columns: 250px 1fr; gap: 12px; }
@@ -486,10 +649,15 @@
 
     /* ── Responsive ───────────────────────────────── */
     @media (max-width: 860px) {
-      .detail-grid { grid-template-columns: 1fr; }
       .snap-layout { grid-template-columns: 1fr; }
       .left-panel  { width: 46px; }
       .left-panel .panel-content { display: none; }
+    }
+    @media (max-width: 640px) {
+      .detail-grid { grid-template-columns: 1fr; height: auto; }
+      .detail-col-img { position: static; }
+      .detail-col-info { max-height: none; overflow-y: visible; }
+      .detail-frame { max-height: 55vw; }
     }
     @media (max-width: 560px) { .cam-grid { grid-template-columns: 1fr; } }
   </style>
@@ -696,6 +864,7 @@
     <div class="tabs">
       <button class="tab active" id="tabGrid"      onclick="setView('grid')" data-i18n="tab.grid">Grid 全覽</button>
       <button class="tab"        id="tabDetail"    onclick="setView('detail')" data-i18n="tab.detail">Detail 詳細</button>
+      <button class="tab"        id="tabFocus"     onclick="setView('focus')" data-i18n="tab.focus">📺 聚焦</button>
       <button class="tab"        id="tabSnapshots" onclick="setView('snapshots')" data-i18n="tab.snapshots">Snapshots 快照</button>
       <button class="tab"        id="tabClips"     onclick="setView('clips')" data-i18n="tab.clips">Clips 錄影</button>
     </div>
@@ -716,6 +885,42 @@
         <div class="empty">
           <div class="empty-icon">🖥️</div>
           <div data-i18n="detail.selectCam">請在 Grid 或左側清單選擇攝影機</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Focus View (聚焦模式: image left, inference text right, no scroll) -->
+    <div class="view-area hidden" id="viewFocus">
+      <!-- Compact toolbar: camera selector + status + ops -->
+      <div class="focus-toolbar">
+        <select id="focusCamSelect" onchange="focusSelectCamera(this.value)">
+          <option value="" data-i18n="focus.pickCam">— 選擇攝影機 —</option>
+        </select>
+        <span class="pill" id="focusStatusPill" style="display:none">
+          <span class="dot" id="focusDot" style="margin-right:3px"></span>
+          <span id="focusStatusLbl">—</span>
+        </span>
+        <span class="pill" id="focusInferMs" style="display:none">infer: —</span>
+        <span class="pill" id="focusReplyAgo" style="display:none">reply: —</span>
+        <span class="tab-spacer" style="flex:1"></span>
+        <button class="btn btn-secondary btn-sm" id="focusOneshot" onclick="focusOneshot()" style="display:none" data-i18n="btn.oneshot">Oneshot</button>
+        <button class="btn btn-danger btn-sm" id="focusClearAlert" onclick="focusClearAlert()" style="display:none" data-i18n="btn.clearAlert">清除告警</button>
+        <button class="btn btn-secondary btn-sm" id="focusEdit" onclick="focusEditCam()" style="display:none" data-i18n="btn.editIcon">✎ 編輯</button>
+      </div>
+      <!-- Alert bar (only when alert is active) -->
+      <div class="focus-alert" id="focusAlertBar" style="display:none">⚠ —</div>
+      <!-- Image (left) + Text (right) -->
+      <div class="focus-layout">
+        <div class="focus-img-wrap" id="focusImgWrap">
+          <div class="focus-img-placeholder" id="focusPlaceholder" data-i18n="focus.selectCam">請從上方下拉選單選擇攝影機</div>
+        </div>
+        <div class="focus-text-card" id="focusTextCard">
+          <div class="focus-text-header">
+            <span class="label" data-i18n="detail.vlmReply">VLM 回應</span>
+            <span class="hint" id="focusFrameAge" style="font-size:11px"></span>
+          </div>
+          <pre class="focus-reply empty" id="focusReply" data-i18n="focus.noReply">尚未推論</pre>
+          <div class="focus-err" id="focusErr" style="display:none"></div>
         </div>
       </div>
     </div>
@@ -879,7 +1084,9 @@ const I18N = {
   'btn.allOneshot':'全部 Oneshot','btn.clearAlerts':'清除所有警報',
   'btn.addCam':'+ 新增','btn.save':'儲存','btn.cancel':'取消','btn.deleteCam':'刪除攝影機',
   'btn.edit':'編輯','btn.clearAlert':'清除警報','btn.ptzStart':'▶ 啟動','btn.ptzStop':'■ 停止',
-  'tab.grid':'Grid 全覽','tab.detail':'Detail 詳細','tab.snapshots':'Snapshots 快照','tab.clips':'Clips 錄影',
+  'tab.grid':'Grid 全覽','tab.detail':'Detail 詳細','tab.focus':'📺 聚焦','tab.snapshots':'Snapshots 快照','tab.clips':'Clips 錄影',
+  'focus.pickCam':'— 選擇攝影機 —','focus.selectCam':'請從上方下拉選單選擇攝影機','focus.noReply':'尚未推論',
+  'btn.oneshot':'Oneshot','btn.editIcon':'✎ 編輯',
   'panel.settings':'設定','panel.scenario':'偵測場景','panel.globalConfig':'全域設定',
   'panel.ollamaModelVer':'Ollama / Model / 版本','panel.yolo':'YOLO 預篩選設定',
   'panel.video':'影片錄製設定','panel.globalPrompt':'全域 VLM Prompt',
@@ -940,7 +1147,9 @@ const I18N = {
   'btn.allOneshot':'All Oneshot','btn.clearAlerts':'Clear All Alerts',
   'btn.addCam':'+ Add','btn.save':'Save','btn.cancel':'Cancel','btn.deleteCam':'Delete Camera',
   'btn.edit':'Edit','btn.clearAlert':'Clear Alert','btn.ptzStart':'▶ Start','btn.ptzStop':'■ Stop',
-  'tab.grid':'Grid','tab.detail':'Detail','tab.snapshots':'Snapshots','tab.clips':'Clips',
+  'tab.grid':'Grid','tab.detail':'Detail','tab.focus':'📺 Focus','tab.snapshots':'Snapshots','tab.clips':'Clips',
+  'focus.pickCam':'— Select camera —','focus.selectCam':'Pick a camera from the dropdown above','focus.noReply':'No inference yet',
+  'btn.oneshot':'Oneshot','btn.editIcon':'✎ Edit',
   'panel.settings':'Settings','panel.scenario':'Detection Scenarios','panel.globalConfig':'Global Config',
   'panel.ollamaModelVer':'Ollama / Model / Version','panel.yolo':'YOLO Pre-filter',
   'panel.video':'Video Recording','panel.globalPrompt':'Global VLM Prompt',
@@ -1001,7 +1210,9 @@ const I18N = {
   'btn.allOneshot':'全体 Oneshot','btn.clearAlerts':'全アラート解除',
   'btn.addCam':'+ 追加','btn.save':'保存','btn.cancel':'キャンセル','btn.deleteCam':'カメラ削除',
   'btn.edit':'編集','btn.clearAlert':'アラート解除','btn.ptzStart':'▶ 開始','btn.ptzStop':'■ 停止',
-  'tab.grid':'グリッド','tab.detail':'詳細','tab.snapshots':'スナップショット','tab.clips':'録画',
+  'tab.grid':'グリッド','tab.detail':'詳細','tab.focus':'📺 フォーカス','tab.snapshots':'スナップショット','tab.clips':'録画',
+  'focus.pickCam':'— カメラ選択 —','focus.selectCam':'上のドロップダウンからカメラを選んでください','focus.noReply':'まだ推論なし',
+  'btn.oneshot':'Oneshot','btn.editIcon':'✎ 編集',
   'panel.settings':'設定','panel.scenario':'検知シナリオ','panel.globalConfig':'グローバル設定',
   'panel.ollamaModelVer':'Ollama / Model / バージョン','panel.yolo':'YOLO プレフィルタ',
   'panel.video':'録画設定','panel.globalPrompt':'グローバル VLM プロンプト',
@@ -1213,7 +1424,7 @@ function cfgOf(id) { return camCfgs.find(c => c.camera_id === id); }
 // ╚══════════════════════════════════════════════════════════╝
 function setView(v) {
   curView = v;
-  ['grid','detail','snapshots','clips'].forEach(n => {
+  ['grid','detail','focus','snapshots','clips'].forEach(n => {
     const elId = 'view' + n[0].toUpperCase() + n.slice(1);
     const tabId = 'tab' + n[0].toUpperCase() + n.slice(1);
     const el = document.getElementById(elId);
@@ -1221,6 +1432,20 @@ function setView(v) {
     if (el) el.classList.toggle('hidden', n !== v);
     if (tab) tab.classList.toggle('active', n === v);
   });
+  // Focus mode: auto-collapse sidebar for max screen real-estate.
+  // Remember whether WE collapsed it so we can restore on exit.
+  const _lp = document.getElementById('leftPanel');
+  if (v === 'focus') {
+    if (!_lp.classList.contains('collapsed')) {
+      _lp.dataset.autoCollapsed = '1';
+      _lp.classList.add('collapsed');
+    }
+    refreshFocusCamSelect();
+    renderFocus();
+  } else if (_lp.dataset.autoCollapsed === '1') {
+    _lp.classList.remove('collapsed');
+    delete _lp.dataset.autoCollapsed;
+  }
   if (v === 'snapshots') refreshSnaps(false);
   if (v === 'clips')     refreshClips();
   if (v === 'detail')    renderDetail();
@@ -1231,6 +1456,9 @@ function setView(v) {
 const lp = document.getElementById('leftPanel');
 document.getElementById('panelToggle').onclick = () => {
   const c = lp.classList.toggle('collapsed');
+  // Manual toggle overrides any Focus-mode auto-collapse flag so we
+  // don't collapse again when the user leaves Focus.
+  delete lp.dataset.autoCollapsed;
   localStorage.setItem('vlm_panel', c ? '1' : '0');
 };
 if (localStorage.getItem('vlm_panel') === '1') lp.classList.add('collapsed');
@@ -1470,16 +1698,24 @@ function _buildDetailHtml(selId, d, cam, st, alertOn) {
   return `
     <div data-alertbar class="alert-bar" style="${alertOn?'':'display:none'}">⚠ ${esc(d.alert_reason||'Alert!')}</div>
     <div class="detail-grid">
-      <div>
+
+      <!-- LEFT: sticky image -->
+      <div class="detail-col-img">
         <div class="detail-frame-wrap">${imgHtml}</div>
-        <div class="card" style="margin-top:12px">
-          <div class="sec-title" style="margin-top:0">${t('detail.vlmReply')}</div>
-          <pre data-reply>${esc(d.last_reply||'')}</pre>
-          <div class="sec-title">${t('detail.errors')}</div>
-          <pre data-err style="min-height:36px;color:${d.last_error?'var(--orange)':'var(--text2)'}">${esc(d.last_error||t('detail.noError'))}</pre>
-        </div>
       </div>
-      <div>
+
+      <!-- RIGHT: scrollable info -->
+      <div class="detail-col-info">
+
+        <!-- VLM Reply — top priority -->
+        <div class="card detail-reply-card">
+          <div class="sec-title" style="margin-top:0">${t('detail.vlmReply')}</div>
+          <pre class="detail-reply-pre" data-reply>${esc(d.last_reply||'')}</pre>
+          <div class="sec-title" style="margin-top:10px">${t('detail.errors')}</div>
+          <pre style="white-space:pre-wrap;word-break:break-word;font-size:12px;margin:0;min-height:28px;color:${d.last_error?'var(--orange)':'var(--text2)'}" data-err>${esc(d.last_error||t('detail.noError'))}</pre>
+        </div>
+
+        <!-- Camera status + ops -->
         <div class="card">
           <div class="sec-title" style="margin-top:0">
             ${esc(cam?.label||selId)}
@@ -1521,6 +1757,7 @@ function _buildDetailHtml(selId, d, cam, st, alertOn) {
           <div class="sec-title">${t('detail.config')}</div>
           <div class="hint">interval: ${cam?.interval_sec||5}s　priority: ${cam?.priority||1}　version: ${statusD.config?.version||'1.0'}${cam?.zone?`　zone: ${cam.zone}`:''}</div>
         </div>
+
       </div>
     </div>`;
 }
@@ -1585,6 +1822,159 @@ function renderDetail() {
   // Snapshot
   const snapEl = el.querySelector('[data-snap]');
   if (snapEl) snapEl.textContent = d.last_snapshot_ts ? t('detail.lastSnap') + ': ' + new Date(d.last_snapshot_ts*1000).toLocaleString() : t('detail.noSnap');
+}
+
+// ╔══════════════════════════════════════════════════════════╗
+// ║  Focus View (聚焦模式)                                     ║
+// ║  Image left + inference text right, fits viewport.        ║
+// ║  Reuses selId — selecting in any view keeps state synced. ║
+// ╚══════════════════════════════════════════════════════════╝
+function refreshFocusCamSelect() {
+  const sel = document.getElementById('focusCamSelect');
+  if (!sel) return;
+  const cur = selId || '';
+  const opts = camCfgs.map(c =>
+    `<option value="${esc(c.camera_id)}"${c.camera_id===cur?' selected':''}>${esc(c.label||c.camera_id)}</option>`
+  ).join('');
+  sel.innerHTML = `<option value="">${t('focus.pickCam')}</option>` + opts;
+}
+
+function focusSelectCamera(id) {
+  selId = id || null;
+  renderCamList();
+  renderFocus();
+}
+
+function focusEditCam()    { if (selId) openEdit(selId); }
+function focusOneshot()    { if (selId) camOneshot(selId); }
+function focusClearAlert() { if (selId) clearCamAlert(selId); }
+
+// Track last rendered string so we only mutate the DOM when content changes
+const _focusLast = { id: null, img: '', reply: '', err: '', alert: '', st: '', ms: '', ra: '', fa: '' };
+
+function renderFocus() {
+  const wrap     = document.getElementById('focusImgWrap');
+  const placeh   = document.getElementById('focusPlaceholder');
+  const replyEl  = document.getElementById('focusReply');
+  const errEl    = document.getElementById('focusErr');
+  const alertBar = document.getElementById('focusAlertBar');
+  const stPill   = document.getElementById('focusStatusPill');
+  const msPill   = document.getElementById('focusInferMs');
+  const raPill   = document.getElementById('focusReplyAgo');
+  const dotEl    = document.getElementById('focusDot');
+  const stLbl    = document.getElementById('focusStatusLbl');
+  const frameAge = document.getElementById('focusFrameAge');
+  const card     = document.getElementById('focusTextCard');
+  const btnEdit  = document.getElementById('focusEdit');
+  const btnOne   = document.getElementById('focusOneshot');
+  const btnClr   = document.getElementById('focusClearAlert');
+
+  if (!selId) {
+    // Reset to empty state
+    if (_focusLast.id !== null) {
+      wrap.innerHTML = `<div class="focus-img-placeholder" id="focusPlaceholder">${t('focus.selectCam')}</div>`;
+      replyEl.textContent = t('focus.noReply');
+      replyEl.classList.add('empty');
+      errEl.style.display = 'none';
+      alertBar.style.display = 'none';
+      stPill.style.display = msPill.style.display = raPill.style.display = 'none';
+      btnEdit.style.display = btnOne.style.display = btnClr.style.display = 'none';
+      frameAge.textContent = '';
+      Object.assign(_focusLast, { id: null, img: '', reply: '', err: '', alert: '', st: '', ms: '', ra: '', fa: '' });
+    }
+    return;
+  }
+
+  const d   = statusD.cameras?.[selId] || {};
+  const cam = cfgOf(selId);
+  const st  = camStatus(selId, d, cam);
+  const alertOn = !!d.alert_active;
+  const replyTxt = d.last_reply || '';
+  const errTxt   = d.last_error || '';
+  const alertTxt = alertOn ? ('⚠ ' + (d.alert_reason || 'Alert!')) : '';
+  const msTxt    = 'infer: ' + fms(d.last_infer_ms);
+  const raTxt    = 'reply: ' + ago(d.last_reply_ts);
+  const faTxt    = 'frame: ' + ago(d.last_frame_ts);
+  const imgKey   = d.last_frame_b64 ? d.last_frame_b64.slice(0, 32) : '';
+  const idChanged = _focusLast.id !== selId;
+
+  // ── Image ─────────────────────────────────────
+  if (idChanged || _focusLast.img !== imgKey) {
+    if (d.last_frame_b64) {
+      const existing = wrap.querySelector('img.focus-img');
+      if (existing) {
+        existing.src = 'data:image/jpeg;base64,' + d.last_frame_b64;
+      } else {
+        wrap.innerHTML = `<img class="focus-img" src="data:image/jpeg;base64,${d.last_frame_b64}" alt="frame" />`;
+      }
+    } else if (idChanged) {
+      const hint = (st === 'stopped' ? t('grid.pressStart')
+                  : st === 'disabled' ? t('grid.disabled')
+                  : t('grid.connecting'));
+      wrap.innerHTML = `<div class="focus-img-placeholder">${esc(hint)}</div>`;
+    }
+    _focusLast.img = imgKey;
+  }
+
+  // ── Toolbar pills + buttons (only show once a camera is selected) ──
+  if (idChanged) {
+    stPill.style.display = '';
+    msPill.style.display = '';
+    raPill.style.display = '';
+    btnEdit.style.display = '';
+    btnOne.style.display  = '';
+  }
+
+  // Status pill
+  if (idChanged || _focusLast.st !== st) {
+    dotEl.className = 'dot ' + st;
+    stLbl.textContent = statusLbl(st) || st;
+    stPill.className = 'pill' + (alertOn ? ' alert' : '');
+    _focusLast.st = st;
+  }
+  if (_focusLast.ms !== msTxt) { msPill.textContent = msTxt; _focusLast.ms = msTxt; }
+  if (_focusLast.ra !== raTxt) { raPill.textContent = raTxt; _focusLast.ra = raTxt; }
+  if (_focusLast.fa !== faTxt) { frameAge.textContent = faTxt; _focusLast.fa = faTxt; }
+
+  // ── Alert bar + Clear button ────────────────────
+  if (_focusLast.alert !== alertTxt) {
+    if (alertOn) {
+      alertBar.style.display = '';
+      alertBar.textContent = alertTxt;
+      card.classList.add('alert-on');
+      btnClr.style.display = '';
+    } else {
+      alertBar.style.display = 'none';
+      card.classList.remove('alert-on');
+      btnClr.style.display = 'none';
+    }
+    _focusLast.alert = alertTxt;
+  }
+
+  // ── VLM reply text ──────────────────────────────
+  if (_focusLast.reply !== replyTxt) {
+    if (replyTxt) {
+      replyEl.classList.remove('empty');
+      replyEl.textContent = replyTxt;
+    } else {
+      replyEl.classList.add('empty');
+      replyEl.textContent = t('focus.noReply');
+    }
+    _focusLast.reply = replyTxt;
+  }
+
+  // ── Error footer ───────────────────────────────
+  if (_focusLast.err !== errTxt) {
+    if (errTxt) {
+      errEl.style.display = '';
+      errEl.textContent = errTxt;
+    } else {
+      errEl.style.display = 'none';
+    }
+    _focusLast.err = errTxt;
+  }
+
+  if (idChanged) _focusLast.id = selId;
 }
 
 // ╔══════════════════════════════════════════════════════════╗
@@ -2002,6 +2392,7 @@ async function loadCams() {
       camCfgs = data.cameras || [];
       document.getElementById('pillCams').innerText = t('header.camCount', {n: camCfgs.length});
       renderCamList(); renderGrid();
+      if (curView === 'focus') refreshFocusCamSelect();
       return;
     } catch(e) {
       console.warn('cameras attempt', attempt + 1, ':', e);
@@ -2081,6 +2472,7 @@ async function poll() {
     renderCamList();
     if      (curView === 'grid')    renderGrid();
     else if (curView === 'detail')  renderDetail();
+    else if (curView === 'focus')   renderFocus();
 
   } catch(e) {
     console.warn('poll:', e);
