@@ -765,18 +765,20 @@ async def _mqtt_main(port: int, topic: str) -> None:
     # that plugin warns about a missing password-file and spends
     # many seconds in its startup probe, which is what was making
     # broker init feel slow.
+    # Modern amqtt uses strict dataclass-validated config — only emit
+    # fields that are in the listener / broker schema. `max_connections`
+    # and similar optional knobs may not be present; bind + type are the
+    # safe minimum across versions.
     config = {
         "listeners": {
             "default": {
                 "type": "tcp",
                 "bind": f"0.0.0.0:{port}",
-                "max_connections": 200,
             },
         },
         "plugins": {
             "auth_anonymous": {"allow-anonymous": True},
         },
-        "timeout-disconnect-delay": 2,
     }
     try:
         _mqtt_broker = Broker(config)
