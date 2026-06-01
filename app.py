@@ -1846,18 +1846,51 @@ def stop_threads() -> None:
 
 app = FastAPI(title="VLM-APP", version="2.0")
 static_dir = Path(__file__).parent / "static"
-app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
+
+# ─── No-cache headers ────────────────────────────────────────
+# `no-store` is critical: it disables Chrome's bfcache (back-forward cache)
+# which `no-cache, must-revalidate` does NOT prevent.  Without no-store, users
+# who navigate away and back can be served a stale fully-rendered page from
+# memory, bypassing all revalidation.
+_NOCACHE_HEADERS = {
+    "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
+    "Pragma": "no-cache",
+    "Expires": "0",
+}
+
+# Per-startup stamp so the front-end can detect "old tab vs new server".
+APP_VERSION_STAMP = str(int(time.time()))
+
+
+class NoCacheStaticFiles(StaticFiles):
+    """StaticFiles that injects no-store headers on every response, so users
+    can never end up with a stale cached index.html or asset after we deploy."""
+    async def get_response(self, path, scope):
+        resp = await super().get_response(path, scope)
+        for k, v in _NOCACHE_HEADERS.items():
+            resp.headers[k] = v
+        return resp
+
+
+app.mount("/static", NoCacheStaticFiles(directory=str(static_dir)), name="static")
 
 
 @app.get("/")
 def index():
-    return FileResponse(
-        str(static_dir / "index.html"),
-        headers={
-            "Cache-Control": "no-cache, must-revalidate",
-            "Pragma": "no-cache",
-        },
-    )
+    # Read fresh from disk each request and inject the version stamp so the
+    # client can detect drift after a redeploy.
+    html = (static_dir / "index.html").read_text(encoding="utf-8")
+    meta = f'<meta name="app-version" content="{APP_VERSION_STAMP}">'
+    if "<head>" in html:
+        html = html.replace("<head>", f"<head>\n  {meta}", 1)
+    from fastapi.responses import HTMLResponse
+    return HTMLResponse(content=html, headers=_NOCACHE_HEADERS)
+
+
+@app.get("/version")
+def get_version():
+    """Lightweight endpoint for clients to poll and detect server restarts."""
+    return JSONResponse({"version": APP_VERSION_STAMP}, headers=_NOCACHE_HEADERS)
 
 
 # ─── Global config ───────────────────────────────────────────

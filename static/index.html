@@ -2090,15 +2090,47 @@ async function poll() {
 }
 
 // ╔══════════════════════════════════════════════════════════╗
+// ║  Server-version drift detection (auto hard-reload)        ║
+// ╚══════════════════════════════════════════════════════════╝
+// Read the version stamp the server injected into <head>. If the live server
+// reports a different one (e.g. after a redeploy), the page in this tab is
+// stale → force a hard reload that bypasses HTTP cache.
+const _BUILT_VERSION = (() => {
+  const m = document.querySelector('meta[name="app-version"]');
+  return m ? m.getAttribute('content') : '';
+})();
+let _reloading = false;
+async function checkServerVersion() {
+  if (_reloading || !_BUILT_VERSION) return;
+  try {
+    const r = await fetch('/version', { cache: 'no-store' });
+    if (!r.ok) return;
+    const { version } = await r.json();
+    if (version && version !== _BUILT_VERSION) {
+      _reloading = true;
+      console.warn('Server version changed:', _BUILT_VERSION, '→', version, '— reloading');
+      // location.reload(true) is deprecated; this bypasses HTTP cache.
+      window.location.href = window.location.pathname + '?v=' + version;
+    }
+  } catch (e) { /* network glitch — ignore, will retry next tick */ }
+}
+
+// ╔══════════════════════════════════════════════════════════╗
 // ║  Init                                                     ║
 // ╚══════════════════════════════════════════════════════════╝
 (async () => {
   document.getElementById('langSelect').value = _uiLang;
+  await checkServerVersion();        // hard-reload immediately if stale
   await loadCams();
   await initScenarios();
   applyI18n();
   await poll();
   setInterval(poll, POLL_MS);
+  setInterval(checkServerVersion, 30000);   // recheck every 30s
+  // Catch bfcache restores — Chrome may resurrect this tab from memory.
+  window.addEventListener('pageshow', (e) => {
+    if (e.persisted) checkServerVersion();
+  });
 })();
 </script>
 </body>
