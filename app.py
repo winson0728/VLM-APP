@@ -323,6 +323,77 @@ FACTORY_SCENARIOS: Dict[str, ScenarioTemplate] = {
         ) + _DANGER_TAG_INSTRUCTION_JA,
         trigger_level=3, pre_sec=10, post_sec=20,
     ),
+    "crowd_density": ScenarioTemplate(
+        id="crowd_density", name="👥 公共場所人潮偵測",
+        name_en="👥 Public Crowd Density",
+        name_ja="👥 公共エリア混雑検知",
+        description="分析人潮密度、排隊、出入口阻塞，壅擠時告警",
+        desc_en="Analyse crowd density, queues and blocked exits; alert when crowded",
+        desc_ja="混雑度・行列・出入口の塞がりを分析し、混雑時にアラート",
+        prompt=(
+            'You are a public-area crowd safety AI monitoring foot traffic in a public space '
+            '(lobby, station, mall, plaza, corridor, queue area, etc.).\n'
+            'Your job is to assess CROWD DENSITY and identify any unsafe gathering patterns.\n'
+            '\n'
+            'Report the following in plain language:\n'
+            '1. Approximate count of visible people, and how they are distributed (clustered vs evenly spread).\n'
+            '2. Crowd density estimate — choose one: sparse / light / moderate / dense / very dense.\n'
+            '3. Movement state — are people freely walking, slowing down, queuing, or stationary/blocked?\n'
+            '4. Any safety concerns: bottlenecks at doorways/stairs/exits, queue overflow, blocked aisles, '
+            'crowd surges, pushing, people falling, signs of panic or distress.\n'
+            '5. Brief overall judgement.\n'
+            '\n'
+            'Danger scale (CROWDING risk, not generic risk):\n'
+            '  0    = empty or only a handful of people, ample space\n'
+            '  1-3  = light traffic, free movement, normal social distancing\n'
+            '  4-5  = moderate crowd, occasional bottleneck but movement OK\n'
+            '  6-7  = clearly crowded, restricted movement, queues forming, exits narrowing — ALERT\n'
+            '  8-9  = very dense, near-capacity, people pressed together, slow flow at exits\n'
+            '  10   = critical: crush risk, blocked exits, panic, people fallen in crowd\n'
+        ) + _DANGER_TAG_INSTRUCTION,
+        prompt_zh=(
+            '你是公共場所人潮安全 AI，正在監控公共空間（大廳、車站、商場、廣場、走廊、排隊區等）的人流。\n'
+            '你的任務是評估「人潮密度」並找出任何不安全的聚集情況。\n'
+            '\n'
+            '請以白話描述：\n'
+            '1. 畫面中可見人數約略多少？分布是集中還是分散？\n'
+            '2. 人潮密度等級 — 選擇：稀疏 / 較少 / 中等 / 擁擠 / 非常擁擠。\n'
+            '3. 移動狀態 — 自由通行、放慢、排隊、靜止/受阻？\n'
+            '4. 安全疑慮：出入口/樓梯/門口瓶頸、隊伍滿溢、走道阻塞、人群推擠、有人倒地、'
+            '出現恐慌或不安跡象。\n'
+            '5. 整體判斷一兩句總結。\n'
+            '\n'
+            '危險等級（衡量「壅擠風險」，非一般風險）：\n'
+            '  0    = 空蕩，只有零星人員，空間充足\n'
+            '  1-3  = 人流稀少，自由通行，社交距離正常\n'
+            '  4-5  = 中度人潮，偶有瓶頸但仍可順暢移動\n'
+            '  6-7  = 明顯擁擠、移動受限、開始排隊、出入口變窄 — 觸發告警\n'
+            '  8-9  = 非常密集、接近容量上限、人員緊貼、出口流動緩慢\n'
+            '  10   = 危急：踩踏風險、出口阻塞、恐慌、人群中有人倒地\n'
+        ) + _DANGER_TAG_INSTRUCTION_ZH,
+        prompt_ja=(
+            'あなたは公共エリアの群衆安全 AI であり、公共空間（ロビー・駅・モール・広場・通路・行列待機エリア等）の'
+            '人流を監視しています。\n'
+            'あなたの任務は「混雑度」を評価し、不安全な集まりのパターンを検出することです。\n'
+            '\n'
+            '以下を平易な言葉で報告してください：\n'
+            '1. 画面内のおおよその人数と分布（集中している／均等に広がっている）。\n'
+            '2. 混雑度レベル — いずれかを選択：閑散 / 軽度 / 中程度 / 混雑 / 非常に混雑。\n'
+            '3. 動き — 自由に歩行 / 速度低下 / 行列 / 停止・滞留。\n'
+            '4. 安全上の懸念：出入口・階段・ドアでのボトルネック、行列のあふれ、通路の塞がり、'
+            '群衆の押し合い、転倒者、パニックや動揺の兆候。\n'
+            '5. 全体的な判断を 1〜2 文で。\n'
+            '\n'
+            '危険度（「混雑リスク」のスケール、一般的リスクではない）：\n'
+            '  0    = ほぼ無人、十分なスペース\n'
+            '  1-3  = 人通り少なく自由に通行、社会的距離が保たれている\n'
+            '  4-5  = 中程度の混雑、時折ボトルネックがあるが流れは概ね良好\n'
+            '  6-7  = 明らかに混雑、移動が制限される、行列が形成、出入口が狭まる — アラート発報\n'
+            '  8-9  = 非常に密、定員に近い、人が密着、出口での流れが遅い\n'
+            '  10   = 重大：圧死リスク、出口閉塞、パニック、群衆中に倒れた人物\n'
+        ) + _DANGER_TAG_INSTRUCTION_JA,
+        trigger_level=6, pre_sec=15, post_sec=30,
+    ),
     "custom": ScenarioTemplate(
         id="custom", name="✏️ 自訂",
         name_en="✏️ Custom",
