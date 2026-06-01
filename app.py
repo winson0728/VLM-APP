@@ -769,6 +769,10 @@ async def _mqtt_main(port: int, topic: str) -> None:
     # fields that are in the listener / broker schema. `max_connections`
     # and similar optional knobs may not be present; bind + type are the
     # safe minimum across versions.
+    # amqtt 0.11.x with the new `plugins` dict expects each key to be a
+    # **fully qualified dotted class path** (it does `import_string(key)`),
+    # not the entry-point name. The default for `allow-anonymous` is True,
+    # so we keep the value explicit for clarity.
     config = {
         "listeners": {
             "default": {
@@ -777,7 +781,7 @@ async def _mqtt_main(port: int, topic: str) -> None:
             },
         },
         "plugins": {
-            "auth_anonymous": {"allow-anonymous": True},
+            "amqtt.plugins.authentication.AnonymousAuthPlugin": {"allow-anonymous": True},
         },
     }
     try:
