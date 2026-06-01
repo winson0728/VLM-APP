@@ -770,9 +770,13 @@ async def _mqtt_main(port: int, topic: str) -> None:
     # and similar optional knobs may not be present; bind + type are the
     # safe minimum across versions.
     # amqtt 0.11.x with the new `plugins` dict expects each key to be a
-    # **fully qualified dotted class path** (it does `import_string(key)`),
-    # not the entry-point name. The default for `allow-anonymous` is True,
-    # so we keep the value explicit for clarity.
+    # **fully qualified dotted class path** (it does `import_string(key)`).
+    # The plugin's Config dataclass is validated through `dacite` in strict
+    # mode, so any key not matching a dataclass field raises. The Config
+    # field for AnonymousAuthPlugin is `allow_anonymous` (underscore),
+    # NOT the hyphenated runtime option name. Passing an empty dict lets
+    # the dataclass defaults take effect (allow_anonymous=True), which is
+    # exactly what we want.
     config = {
         "listeners": {
             "default": {
@@ -781,7 +785,7 @@ async def _mqtt_main(port: int, topic: str) -> None:
             },
         },
         "plugins": {
-            "amqtt.plugins.authentication.AnonymousAuthPlugin": {"allow-anonymous": True},
+            "amqtt.plugins.authentication.AnonymousAuthPlugin": {},
         },
     }
     try:
