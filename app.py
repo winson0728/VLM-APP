@@ -759,9 +759,12 @@ async def _mqtt_main(port: int, topic: str) -> None:
 
     # ── Phase 1: bind broker ─────────────────────────────────
     _mqtt_phase = "broker_start"
-    # Minimal config — let amqtt use its defaults for auth/plugins, just
-    # turn anonymous on. Overriding `"plugins": []` in earlier revisions
-    # silently disabled the auth handler and blocked connections.
+    # Use amqtt's modern `plugins` dict instead of the deprecated
+    # `auth` / `topic-check` / `sys_interval` keys.  Listing only
+    # auth_anonymous skips the default auth_file plugin entirely —
+    # that plugin warns about a missing password-file and spends
+    # many seconds in its startup probe, which is what was making
+    # broker init feel slow.
     config = {
         "listeners": {
             "default": {
@@ -770,9 +773,10 @@ async def _mqtt_main(port: int, topic: str) -> None:
                 "max_connections": 200,
             },
         },
-        "sys_interval": 0,
-        "auth": {"allow-anonymous": True},
-        "topic-check": {"enabled": False},
+        "plugins": {
+            "auth_anonymous": {"allow-anonymous": True},
+        },
+        "timeout-disconnect-delay": 2,
     }
     try:
         _mqtt_broker = Broker(config)
