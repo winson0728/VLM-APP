@@ -2183,31 +2183,31 @@ function _renderFocusZone(e) {
     _focusLast.frames = {};
   }
 
-  // Incremental per-cell update
+  // Incremental per-cell update.
+  // NOTE: we always assign img.src — using last_frame_b64.slice(0,32) as a
+  // change key fails because JPEG/JFIF header bytes are identical across
+  // every frame, so it would freeze the image on the first one captured.
   for (const id of camIds) {
     const cell = e.wrap.querySelector(`[data-cell="${CSS.escape(id)}"]`);
     if (!cell) continue;
     const d  = statusD.cameras?.[id] || {};
     const cam = cfgOf(id);
     const st  = camStatus(id, d, cam);
-    const frameKey = d.last_frame_b64 ? d.last_frame_b64.slice(0, 32) : '';
 
-    if (_focusLast.frames[id] !== frameKey) {
-      let img = cell.querySelector('img');
-      if (d.last_frame_b64) {
-        if (img) {
-          img.src = 'data:image/jpeg;base64,' + d.last_frame_b64;
-        } else {
-          // Drop placeholder, insert image while preserving overlays.
-          const emp = cell.querySelector('.focus-img-cell-empty');
-          if (emp) emp.remove();
-          const newImg = document.createElement('img');
-          newImg.src = 'data:image/jpeg;base64,' + d.last_frame_b64;
-          newImg.alt = id;
-          cell.insertBefore(newImg, cell.firstChild);
-        }
+    let img = cell.querySelector('img');
+    if (d.last_frame_b64) {
+      const dataUri = 'data:image/jpeg;base64,' + d.last_frame_b64;
+      if (img) {
+        img.src = dataUri;
+      } else {
+        // Drop placeholder, insert image while preserving overlays.
+        const emp = cell.querySelector('.focus-img-cell-empty');
+        if (emp) emp.remove();
+        const newImg = document.createElement('img');
+        newImg.src = dataUri;
+        newImg.alt = id;
+        cell.insertBefore(newImg, cell.firstChild);
       }
-      _focusLast.frames[id] = frameKey;
     }
     // Status dot + alert outline
     const dot = cell.querySelector('[data-cell-dot]');
@@ -2269,25 +2269,26 @@ function _renderFocusCam(e) {
   const msTxt    = 'infer: ' + fms(d.last_infer_ms);
   const raTxt    = 'reply: ' + ago(d.last_reply_ts);
   const faTxt    = 'frame: ' + ago(d.last_frame_ts);
-  const imgKey   = d.last_frame_b64 ? d.last_frame_b64.slice(0, 32) : '';
   const kindChanged = (_focusLast.kind !== 'cam' || _focusLast.id !== selId);
 
   // ── Image (single, fills column) ──────────────
-  if (kindChanged || (_focusLast.frames[selId] !== imgKey)) {
-    if (d.last_frame_b64) {
-      const existing = e.wrap.querySelector('img.focus-img');
-      if (existing && !kindChanged) {
-        existing.src = 'data:image/jpeg;base64,' + d.last_frame_b64;
-      } else {
-        e.wrap.innerHTML = `<img class="focus-img" src="data:image/jpeg;base64,${d.last_frame_b64}" alt="frame" />`;
-      }
-    } else if (kindChanged) {
-      const hint = (st === 'stopped' ? t('grid.pressStart')
-                  : st === 'disabled' ? t('grid.disabled')
-                  : t('grid.connecting'));
-      e.wrap.innerHTML = `<div class="focus-img-placeholder">${esc(hint)}</div>`;
+  // Always update src each poll — the previous "slice(0,32) as change key"
+  // optimisation matched JPEG header bytes only and made the frame freeze.
+  if (d.last_frame_b64) {
+    const dataUri = 'data:image/jpeg;base64,' + d.last_frame_b64;
+    const existing = e.wrap.querySelector('img.focus-img');
+    if (existing && !kindChanged) {
+      existing.src = dataUri;
+    } else {
+      e.wrap.innerHTML = `<img class="focus-img" src="${dataUri}" alt="frame" />`;
     }
-    _focusLast.frames = { [selId]: imgKey };
+  } else if (kindChanged) {
+    const hint = (st === 'stopped' ? t('grid.pressStart')
+                : st === 'disabled' ? t('grid.disabled')
+                : t('grid.connecting'));
+    e.wrap.innerHTML = `<div class="focus-img-placeholder">${esc(hint)}</div>`;
+  }
+  if (kindChanged) {
     _focusLast.gridKey = 'cam:' + selId;
   }
 
