@@ -1280,20 +1280,28 @@ def _read_latest_frame(cap: cv2.VideoCapture, max_skip: int = 8):
 # Subprocess ffmpeg GPU capture
 # ──────────────────────────────────────────────────────────────
 
+def _is_rtsp_url(url: str) -> bool:
+    """RTSP-specific flags (-rtsp_transport, -buffer_size) are only safe for
+    rtsp:// URLs. HTTP-FLV / RTMP / file inputs reject them outright."""
+    return (url or "").strip().lower().startswith("rtsp://")
+
+
 def _probe_stream_info(rtsp: str) -> tuple[int, int, str]:
-    """Probe RTSP stream: returns (width, height, codec) using ffprobe.
+    """Probe stream: returns (width, height, codec) using ffprobe.
     codec is 'h264', 'h265', or 'h264' as safe fallback.
+    Works for rtsp://, http://, https://, rtmp:// and file inputs.
     Returns (0, 0, 'h264') on failure."""
     ffprobe = shutil.which("ffprobe") or ""
     if not ffprobe and _FFMPEG_BIN:
         ffprobe = str(Path(_FFMPEG_BIN).parent / "ffprobe")
     if ffprobe and Path(ffprobe).exists():
         try:
+            # -rtsp_transport is only meaningful for RTSP; HTTP demuxer rejects it
+            extra = ["-rtsp_transport", "tcp"] if _is_rtsp_url(rtsp) else []
             r = subprocess.run(
                 [ffprobe, "-v", "error", "-select_streams", "v:0",
                  "-show_entries", "stream=width,height,codec_name",
-                 "-of", "csv=p=0",
-                 "-rtsp_transport", "tcp", "-i", rtsp],
+                 "-of", "csv=p=0", *extra, "-i", rtsp],
                 capture_output=True, text=True, timeout=10,
             )
             # Output: "width,height,codec_name" e.g. "1920,1080,h264" or "640,480,hevc"
@@ -1340,13 +1348,26 @@ def _start_ffmpeg_process(rtsp: str, w: int, h: int, use_gpu: bool,
     vf = (f"scale=iw:ih:flags=bicubic:in_color_matrix=bt601:out_color_matrix=bt601,"
           f"fps={_DISPLAY_FPS}")
     cmd += [
-        "-rtsp_transport", "tcp",
         "-fflags", "nobuffer+discardcorrupt",
         "-flags", "low_delay",
         "-max_delay", "50000",
-        "-buffer_size", "65536",
-        "-probesize", "32",
-        "-analyzeduration", "0",
+    ]
+    # Protocol-specific input flags. RTSP wants its TCP-transport hint plus
+    # a UDP receive-buffer override; HTTP-FLV / RTMP demuxers reject those
+    # and need a larger probesize so they can read the FLV/RTMP header.
+    if _is_rtsp_url(rtsp):
+        cmd += [
+            "-rtsp_transport", "tcp",
+            "-buffer_size", "65536",
+            "-probesize", "32",
+            "-analyzeduration", "0",
+        ]
+    else:
+        cmd += [
+            "-probesize", "1000000",
+            "-analyzeduration", "1000000",
+        ]
+    cmd += [
         "-i", rtsp,
         "-vf", vf,
         "-f", "rawvideo",
